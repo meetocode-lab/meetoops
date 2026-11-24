@@ -1,0 +1,32 @@
+# MeetoOps — Zero-Configuration Production Docker Compose
+# Start with: docker compose up -d
+# No .env file required. Default port 9480 (avoids 8080/3000/9000 collisions).
+
+services:
+  meetoops:
+    build:
+      context: ..
+      dockerfile: deployments/Dockerfile
+    image: ghcr.io/meetoops/meetoops:latest
+    container_name: meetoops
+    restart: unless-stopped
+    ports:
+      - "9480:9480"
+    volumes:
+      - meetoops_data:/data
+      - meetoops_keys:/data/keys
+      # Optional: Mount local Docker socket for local host management.
+      # Omit this line if managing remote servers via meetoops-agent only.
+      - /var/run/docker.sock:/var/run/docker.sock
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/meetoops-server", "healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  meetoops_data:
+  meetoops_keys:

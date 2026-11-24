@@ -1,0 +1,18 @@
+[package]
+name = "meetoops-agent"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+meetoops-common.workspace = true
+meetoops-security.workspace = true
+meetoops-docker.workspace = true
+meetoops-discovery.workspace = true
+meetoops-monitoring.workspace = true
+tokio.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

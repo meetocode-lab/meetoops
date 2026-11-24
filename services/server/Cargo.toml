@@ -1,0 +1,33 @@
+[package]
+name = "meetoops-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+meetoops-common.workspace = true
+meetoops-security.workspace = true
+meetoops-core.workspace = true
+meetoops-docker.workspace = true
+meetoops-discovery.workspace = true
+meetoops-monitoring.workspace = true
+meetoops-database.workspace = true
+meetoops-redis.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+futures-util.workspace = true
+reqwest.workspace = true
+axum.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+sqlx.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+tower = { workspace = true, features = ["util"] }
+http-body-util = "0.1"
