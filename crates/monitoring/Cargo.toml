@@ -1,0 +1,14 @@
+[package]
+name = "meetoops-monitoring"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+meetoops-common.workspace = true
+sysinfo.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_System_Performance"] }
