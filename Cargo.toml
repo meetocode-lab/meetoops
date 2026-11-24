@@ -67,3 +67,10 @@ meetoops-discovery = { path = "crates/discovery" }
 meetoops-monitoring = { path = "crates/monitoring" }
 meetoops-database = { path = "crates/database" }
 meetoops-redis = { path = "crates/redis" }
+
+[profile.release]
+opt-level = "z"
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"
