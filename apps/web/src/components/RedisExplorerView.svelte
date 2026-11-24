@@ -11,7 +11,7 @@
   import { confirmDialog } from '../lib/confirm.svelte';
   import { toast } from '../lib/toast.svelte';
   import Select from './ui/Select.svelte';
-  import { KeyRound, Search, Trash2, Terminal, Save, AlertCircle, RefreshCw, Plus, Pencil } from 'lucide-svelte';
+  import { KeyRound, Search, Trash2, Terminal, Save, AlertCircle, RefreshCw, Plus, Pencil, Loader2 } from 'lucide-svelte';
 
   interface Props {
     lang: Language;
@@ -38,18 +38,69 @@
   let cmdOutput = $state<string | null>(null);
   let errorMsg = $state<string | null>(null);
 
-  const redisServices = $derived(
-    services.filter((s) => s.service_type === 'redis' && s.readiness_stage === 'explorer_ready'),
-  );
+  // Inline credential setup for discovered-but-unverified Redis
+  let credHost = $state('');
+  let credPort = $state(6379);
+  let credUsername = $state('');
+  let credPassword = $state('');
+  let credDb = $state(0);
+  let savingCreds = $state(false);
+
+  const redisServices = $derived(services.filter((s) => s.service_type === 'redis'));
+  const activeService = $derived(redisServices.find((s) => s.id === selectedServiceId) ?? null);
+  const isReady = $derived(activeService?.readiness_stage === 'explorer_ready');
 
   async function loadServices() {
     try {
       services = await api.listServices();
       if (!selectedServiceId && redisServices.length > 0) {
-        selectedServiceId = redisServices[0].id;
+        const readyFirst = redisServices.find((s) => s.readiness_stage === 'explorer_ready');
+        selectedServiceId = (readyFirst ?? redisServices[0]).id;
       }
     } catch (err) {
       errorMsg = err instanceof Error ? err.message : 'Failed to load Redis services.';
+    }
+  }
+
+  $effect(() => {
+    const svc = activeService;
+    if (svc && svc.readiness_stage !== 'explorer_ready') {
+      credHost = svc.host ?? '127.0.0.1';
+      credPort = svc.port ?? 6379;
+      credUsername = '';
+      credPassword = '';
+      credDb = 0;
+    }
+  });
+
+  async function handleSaveCredentials(e: SubmitEvent) {
+    e.preventDefault();
+    if (!activeService) return;
+    savingCreds = true;
+    errorMsg = null;
+    try {
+      const res = await api.saveServiceCredentials(activeService.id, {
+        host: credHost.trim(),
+        port: Number(credPort),
+        username: credUsername.trim() || undefined,
+        password: credPassword || undefined,
+        redis_db: Number(credDb) || 0,
+      });
+      await loadServices();
+      if (res.auth_verified) {
+        toast.success('Redis connected', res.server_banner ?? activeService.name);
+        await loadOverviewAndScan(activeService.id, 0, false);
+      } else {
+        const msg = res.verify_error ?? 'Redis connection failed.';
+        errorMsg = msg;
+        toast.error('Connection failed', msg);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to connect Redis.';
+      errorMsg = msg;
+      toast.error('Connection failed', msg);
+    } finally {
+      savingCreds = false;
     }
   }
 
@@ -185,7 +236,7 @@
   });
 
   $effect(() => {
-    if (selectedServiceId) loadOverviewAndScan(selectedServiceId, 0, false);
+    if (selectedServiceId && isReady) loadOverviewAndScan(selectedServiceId, 0, false);
   });
 </script>
 
@@ -210,7 +261,7 @@
         options={redisServices.map((s) => ({
           value: s.id,
           label: s.name,
-          description: `${s.host ?? ''}:${s.port ?? ''}`,
+          description: `${s.host ?? ''}:${s.port ?? ''} · ${s.readiness_stage === 'explorer_ready' ? 'Ready' : 'Needs Credentials'}`,
         }))}
       />
       <button
@@ -232,8 +283,61 @@
 
   {#if redisServices.length === 0}
     <div class="w-full p-8 rounded-[var(--radius-md)] bg-[var(--surface)] border border-[var(--border)] text-center text-xs text-[var(--muted-foreground)]">
-      Go to <strong>Service Discovery</strong> to scan or add a Redis connection and verify its credentials first.
+      No Redis containers discovered yet. Go to <strong>Service Discovery</strong> and click <strong>Scan Containers</strong> or <strong>Add Connection</strong>.
     </div>
+  {:else if activeService && !isReady}
+    <form
+      onsubmit={handleSaveCredentials}
+      class="w-full max-w-2xl p-5 rounded-[var(--radius-md)] bg-[var(--surface)] border border-[var(--border-strong)] space-y-4"
+    >
+      <div class="flex items-start gap-3">
+        <div class="p-2 rounded-lg bg-[var(--primary-subtle)] text-[var(--primary)]">
+          <KeyRound class="w-4 h-4" />
+        </div>
+        <div>
+          <h2 class="text-sm font-semibold text-[var(--foreground)]">
+            Connect to {activeService.name} (Redis)
+          </h2>
+          <p class="text-xs text-[var(--muted-foreground)] mt-0.5">
+            Leave password blank if Redis has no auth, then click Verify & Connect to open the SCAN Key Browser.
+          </p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <label class="md:col-span-2 space-y-1">
+          <span class="text-[11px] text-[var(--muted-foreground)]">Host</span>
+          <input type="text" required bind:value={credHost} class="w-full px-3 rounded-[var(--radius-md)] bg-[var(--background)] border border-[var(--border-strong)] font-mono text-xs" />
+        </label>
+        <label class="space-y-1">
+          <span class="text-[11px] text-[var(--muted-foreground)]">Port</span>
+          <input type="number" required bind:value={credPort} class="w-full px-3 rounded-[var(--radius-md)] bg-[var(--background)] border border-[var(--border-strong)] font-mono text-xs" />
+        </label>
+        <label class="space-y-1">
+          <span class="text-[11px] text-[var(--muted-foreground)]">Username (optional)</span>
+          <input type="text" bind:value={credUsername} placeholder="default" class="w-full px-3 rounded-[var(--radius-md)] bg-[var(--background)] border border-[var(--border-strong)] font-mono text-xs" />
+        </label>
+        <label class="space-y-1">
+          <span class="text-[11px] text-[var(--muted-foreground)]">Password (optional)</span>
+          <input type="password" bind:value={credPassword} placeholder="Leave blank if none" class="w-full px-3 rounded-[var(--radius-md)] bg-[var(--background)] border border-[var(--border-strong)] font-mono text-xs" />
+        </label>
+        <label class="space-y-1">
+          <span class="text-[11px] text-[var(--muted-foreground)]">DB Index</span>
+          <input type="number" min="0" max="15" bind:value={credDb} class="w-full px-3 rounded-[var(--radius-md)] bg-[var(--background)] border border-[var(--border-strong)] font-mono text-xs" />
+        </label>
+      </div>
+
+      <div class="flex justify-end pt-1">
+        <button
+          type="submit"
+          disabled={savingCreds}
+          class="h-[34px] px-4 rounded-[var(--radius-md)] bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-[var(--primary-foreground)] text-xs font-medium inline-flex items-center gap-1.5 disabled:opacity-50"
+        >
+          {#if savingCreds}<Loader2 class="w-3.5 h-3.5 animate-spin" />{/if}
+          Verify & Connect
+        </button>
+      </div>
+    </form>
   {:else}
     {#if overview}
       <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">

@@ -16,6 +16,8 @@ services:
     restart: unless-stopped
     ports:
       - "9480:9480"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - meetoops_data:/data
       - meetoops_keys:/data/keys

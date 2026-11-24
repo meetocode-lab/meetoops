@@ -104,15 +104,21 @@ pub fn detect_service(meta: &ContainerMetadataInput) -> Option<DetectedServiceCa
                 ServiceConfidence::Probable
             };
 
+            let default_host = if std::path::Path::new("/.dockerenv").exists() {
+                "host.docker.internal".to_string()
+            } else {
+                "127.0.0.1".to_string()
+            };
+
             let (host, port, readiness_stage) = if let Some((_, Some(pub_p))) = port_match {
                 (
-                    Some("127.0.0.1".to_string()),
+                    Some(default_host),
                     Some(*pub_p),
                     ReadinessStage::ConnectionDiscovered,
                 )
             } else if let Some((priv_p, None)) = port_match {
                 (
-                    Some("127.0.0.1".to_string()),
+                    Some(default_host),
                     Some(*priv_p),
                     ReadinessStage::ConnectionDiscovered,
                 )

@@ -95,6 +95,17 @@ fn map_redis_err(err: RedisExplorerError) -> ApiError {
     }
 }
 
+fn resolve_reachable_host(host: &str) -> String {
+    let trimmed = host.trim();
+    if std::path::Path::new("/.dockerenv").exists()
+        && matches!(trimmed, "127.0.0.1" | "localhost" | "::1")
+    {
+        "host.docker.internal".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
 async fn load_db_config(
     state: &AppState,
     service_id: &str,
@@ -112,7 +123,8 @@ async fn load_db_config(
 
     let host = svc
         .host
-        .clone()
+        .as_deref()
+        .map(resolve_reachable_host)
         .ok_or_else(|| ApiError::bad_request("Service host is missing."))?;
     let port = svc
         .port
@@ -150,7 +162,8 @@ async fn load_redis_config(
 
     let host = svc
         .host
-        .clone()
+        .as_deref()
+        .map(resolve_reachable_host)
         .ok_or_else(|| ApiError::bad_request("Redis host is missing."))?;
     let port = svc
         .port
@@ -382,12 +395,13 @@ async fn api_save_service_credentials(
         .save_encrypted_secret(&state.vault, "service_connection", &id, &plaintext)
         .await?;
 
-    // Live driver authentication test
+    // Live driver authentication test (rewriting loopback to host.docker.internal inside Docker)
+    let effective_host = resolve_reachable_host(&payload.host);
     let (auth_verified, server_banner, verify_error) = match svc.service_type.as_str() {
         "postgres" | "mysql" | "mariadb" | "mongodb" => {
             let cfg = DbConnectionConfig {
                 engine: svc.service_type.clone(),
-                host: payload.host.clone(),
+                host: effective_host.clone(),
                 port: payload.port,
                 username: secret.username,
                 password: secret.password,
@@ -400,7 +414,7 @@ async fn api_save_service_credentials(
         }
         "redis" => {
             let cfg = RedisConnectionConfig {
-                host: payload.host.clone(),
+                host: effective_host.clone(),
                 port: payload.port,
                 username: if secret.username.is_empty() {
                     None

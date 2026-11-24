@@ -9,7 +9,8 @@
   import type { Language } from '../lib/i18n';
   import { toast } from '../lib/toast.svelte';
   import Select from './ui/Select.svelte';
-  import { Database, Table2, Play, Shield, AlertCircle, Loader2, Download } from 'lucide-svelte';
+  import Checkbox from './ui/Checkbox.svelte';
+  import { Database, Table2, Play, Shield, AlertCircle, Loader2, Download, KeyRound } from 'lucide-svelte';
 
   interface Props {
     lang: Language;
@@ -33,24 +34,75 @@
   let busy = $state(false);
   let errorMsg = $state<string | null>(null);
 
+  // Inline credential setup for discovered-but-unverified services
+  let credHost = $state('');
+  let credPort = $state(5432);
+  let credUsername = $state('');
+  let credPassword = $state('');
+  let credDatabase = $state('');
+  let credReadOnly = $state(true);
+  let savingCreds = $state(false);
+
   const dbServices = $derived(
-    services.filter(
-      (s) =>
-        ['postgres', 'mysql', 'mariadb', 'mongodb'].includes(s.service_type) &&
-        s.readiness_stage === 'explorer_ready',
-    ),
+    services.filter((s) => ['postgres', 'mysql', 'mariadb', 'mongodb'].includes(s.service_type)),
   );
 
   const activeService = $derived(dbServices.find((s) => s.id === selectedServiceId) ?? null);
+  const isReady = $derived(activeService?.readiness_stage === 'explorer_ready');
 
   async function loadServices() {
     try {
       services = await api.listServices();
       if (!selectedServiceId && dbServices.length > 0) {
-        selectedServiceId = dbServices[0].id;
+        const readyFirst = dbServices.find((s) => s.readiness_stage === 'explorer_ready');
+        selectedServiceId = (readyFirst ?? dbServices[0]).id;
       }
     } catch (err) {
       errorMsg = err instanceof Error ? err.message : 'Failed to load database services.';
+    }
+  }
+
+  $effect(() => {
+    const svc = activeService;
+    if (svc && svc.readiness_stage !== 'explorer_ready') {
+      credHost = svc.host ?? '127.0.0.1';
+      credPort = svc.port ?? (svc.service_type === 'postgres' ? 5432 : svc.service_type === 'mongodb' ? 27017 : 3306);
+      credUsername = svc.service_type === 'postgres' ? 'postgres' : svc.service_type === 'mysql' || svc.service_type === 'mariadb' ? 'root' : '';
+      credPassword = '';
+      credDatabase = svc.service_type === 'postgres' ? 'postgres' : '';
+      credReadOnly = svc.read_only_mode;
+    }
+  });
+
+  async function handleSaveCredentials(e: SubmitEvent) {
+    e.preventDefault();
+    if (!activeService) return;
+    savingCreds = true;
+    errorMsg = null;
+    try {
+      const res = await api.saveServiceCredentials(activeService.id, {
+        host: credHost.trim(),
+        port: Number(credPort),
+        username: credUsername.trim() || undefined,
+        password: credPassword || undefined,
+        database: credDatabase.trim() || undefined,
+        read_only_mode: credReadOnly,
+      });
+      await loadServices();
+      if (res.auth_verified) {
+        toast.success('Database connected', res.server_banner ?? activeService.name);
+        await loadDatabases(activeService.id);
+      } else {
+        const msg = res.verify_error ?? 'Authentication failed. Please check credentials and host.';
+        errorMsg = msg;
+        toast.error('Connection failed', msg);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to save credentials.';
+      errorMsg = msg;
+      toast.error('Connection failed', msg);
+    } finally {
+      savingCreds = false;
     }
   }
 
@@ -170,15 +222,15 @@
   });
 
   $effect(() => {
-    if (selectedServiceId) loadDatabases(selectedServiceId);
+    if (selectedServiceId && isReady) loadDatabases(selectedServiceId);
   });
 
   $effect(() => {
-    if (selectedServiceId && selectedDb) loadTables(selectedServiceId, selectedDb);
+    if (selectedServiceId && isReady && selectedDb) loadTables(selectedServiceId, selectedDb);
   });
 
   $effect(() => {
-    if (selectedServiceId && selectedDb && selectedTable && tab !== 'sql') {
+    if (selectedServiceId && isReady && selectedDb && selectedTable && tab !== 'sql') {
       loadTableData(selectedServiceId, selectedDb, selectedTable, offset);
     }
   });
@@ -205,7 +257,7 @@
         options={dbServices.map((s) => ({
           value: s.id,
           label: s.name,
-          description: `${s.service_type} · ${s.host ?? ''}:${s.port ?? ''}`,
+          description: `${s.service_type} · ${s.host ?? ''}:${s.port ?? ''} · ${s.readiness_stage === 'explorer_ready' ? 'Ready' : 'Needs Credentials'}`,
         }))}
       />
 
@@ -226,8 +278,62 @@
 
   {#if dbServices.length === 0}
     <div class="w-full p-8 rounded-[var(--radius-md)] bg-[var(--surface)] border border-[var(--border)] text-center text-xs text-[var(--muted-foreground)]">
-      Go to <strong>Service Discovery</strong> to scan or add a PostgreSQL, MySQL/MariaDB, or MongoDB connection and verify its credentials first.
+      No database containers discovered yet. Go to <strong>Service Discovery</strong> and click <strong>Scan Containers</strong> or <strong>Add Connection</strong>.
     </div>
+  {:else if activeService && !isReady}
+    <form
+      onsubmit={handleSaveCredentials}
+      class="w-full max-w-2xl p-5 rounded-[var(--radius-md)] bg-[var(--surface)] border border-[var(--border-strong)] space-y-4"
+    >
+      <div class="flex items-start gap-3">
+        <div class="p-2 rounded-lg bg-[var(--primary-subtle)] text-[var(--primary)]">
+          <KeyRound class="w-4 h-4" />
+        </div>
+        <div>
+          <h2 class="text-sm font-semibold text-[var(--foreground)]">
+            Connect to {activeService.name} ({activeService.service_type.toUpperCase()})
+          </h2>
+          <p class="text-xs text-[var(--muted-foreground)] mt-0.5">
+            This database was discovered automatically. Enter credentials once (encrypted with AES-256-GCM) to verify and open the Explorer.
+          </p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <label class="md:col-span-2 space-y-1">
+          <span class="text-[11px] text-[var(--muted-foreground)]">Host</span>
+          <input type="text" required bind:value={credHost} class="w-full px-3 rounded-[var(--radius-md)] bg-[var(--background)] border border-[var(--border-strong)] font-mono text-xs" />
+        </label>
+        <label class="space-y-1">
+          <span class="text-[11px] text-[var(--muted-foreground)]">Port</span>
+          <input type="number" required bind:value={credPort} class="w-full px-3 rounded-[var(--radius-md)] bg-[var(--background)] border border-[var(--border-strong)] font-mono text-xs" />
+        </label>
+        <label class="space-y-1">
+          <span class="text-[11px] text-[var(--muted-foreground)]">Username</span>
+          <input type="text" bind:value={credUsername} placeholder="postgres" class="w-full px-3 rounded-[var(--radius-md)] bg-[var(--background)] border border-[var(--border-strong)] font-mono text-xs" />
+        </label>
+        <label class="space-y-1">
+          <span class="text-[11px] text-[var(--muted-foreground)]">Password</span>
+          <input type="password" bind:value={credPassword} placeholder="••••••••" class="w-full px-3 rounded-[var(--radius-md)] bg-[var(--background)] border border-[var(--border-strong)] font-mono text-xs" />
+        </label>
+        <label class="space-y-1">
+          <span class="text-[11px] text-[var(--muted-foreground)]">Database Name</span>
+          <input type="text" bind:value={credDatabase} placeholder="postgres" class="w-full px-3 rounded-[var(--radius-md)] bg-[var(--background)] border border-[var(--border-strong)] font-mono text-xs" />
+        </label>
+      </div>
+
+      <div class="flex items-center justify-between pt-1">
+        <Checkbox bind:checked={credReadOnly} label="Read-Only Mode (block INSERT/UPDATE/DELETE/DROP)" />
+        <button
+          type="submit"
+          disabled={savingCreds}
+          class="h-[34px] px-4 rounded-[var(--radius-md)] bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-[var(--primary-foreground)] text-xs font-medium inline-flex items-center gap-1.5 disabled:opacity-50"
+        >
+          {#if savingCreds}<Loader2 class="w-3.5 h-3.5 animate-spin" />{/if}
+          Verify & Connect
+        </button>
+      </div>
+    </form>
   {:else}
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
       <!-- Left Schema Tree -->
