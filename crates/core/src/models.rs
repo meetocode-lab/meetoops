@@ -179,3 +179,54 @@ pub struct AlertChannelDto {
     pub is_enabled: bool,
     pub created_at: String,
 }
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SshHostDto {
+    pub id: String,
+    pub name: String,
+    pub host: String,
+    pub port: i64,
+    pub username: String,
+    pub auth_type: String,
+    pub use_sudo: bool,
+    pub provisioned_user: Option<String>,
+    pub last_banner: Option<String>,
+    pub last_connected_at: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ProjectDto {
+    pub id: String,
+    pub name: String,
+    pub ssh_host_id: String,
+    pub ssh_host_name: String,
+    pub repo_url: String,
+    pub branch: String,
+    pub deploy_path: String,
+    pub deploy_command: String,
+    pub compose_override: Option<String>,
+    pub has_git_token: bool,
+    pub has_env_vars: bool,
+    pub last_deployed_commit: Option<String>,
+    pub remote_head_commit: Option<String>,
+    pub update_available: bool,
+    pub last_status: String,
+    pub last_deployed_at: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ProjectDeploymentDto {
+    pub id: String,
+    pub project_id: String,
+    pub action: String,
+    pub status: String,
+    pub commit_hash: Option<String>,
+    pub triggered_by: Option<String>,
+    pub log_output: String,
+    pub started_at: String,
+    pub finished_at: Option<String>,
+}

@@ -9,6 +9,7 @@ members = [
     "crates/monitoring",
     "crates/database",
     "crates/redis",
+    "crates/ssh",
     "services/server",
     "services/agent",
 ]
@@ -67,6 +68,7 @@ meetoops-discovery = { path = "crates/discovery" }
 meetoops-monitoring = { path = "crates/monitoring" }
 meetoops-database = { path = "crates/database" }
 meetoops-redis = { path = "crates/redis" }
+meetoops-ssh = { path = "crates/ssh" }
 
 [profile.release]
 opt-level = "z"

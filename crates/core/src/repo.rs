@@ -1,8 +1,8 @@
 use crate::error::CoreError;
 use crate::models::{
     AlertChannelDto, AlertEventDto, AlertRuleDto, ApiTokenDto, AppSettingsDto, AppStateRecord,
-    AuditLogEntry, AuthenticatedSession, DiscoveredServiceDto, HostMetricPoint, ServerSummary,
-    UserPublic,
+    AuditLogEntry, AuthenticatedSession, DiscoveredServiceDto, HostMetricPoint,
+    ProjectDeploymentDto, ProjectDto, ServerSummary, SshHostDto, UserPublic,
 };
 use chrono::{Duration, Utc};
 use meetoops_common::{Role, SetupStage};
@@ -2226,6 +2226,456 @@ impl CoreStore {
         sqlx::query(&sql).execute(&self.pool).await?;
         Ok(())
     }
+
+    // --- Phase 6: SSH Hosts & GitHub Projects ---
+
+    pub async fn list_ssh_hosts(&self) -> Result<Vec<SshHostDto>, CoreError> {
+        let rows = sqlx::query(
+            "SELECT id, name, host, port, username, auth_type, use_sudo, provisioned_user,
+                    last_banner, last_connected_at, created_at, updated_at
+             FROM ssh_hosts ORDER BY created_at DESC",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut out = Vec::with_capacity(rows.len());
+        for row in rows {
+            let use_sudo: i64 = row.try_get("use_sudo")?;
+            out.push(SshHostDto {
+                id: row.try_get("id")?,
+                name: row.try_get("name")?,
+                host: row.try_get("host")?,
+                port: row.try_get("port")?,
+                username: row.try_get("username")?,
+                auth_type: row.try_get("auth_type")?,
+                use_sudo: use_sudo != 0,
+                provisioned_user: row.try_get("provisioned_user")?,
+                last_banner: row.try_get("last_banner")?,
+                last_connected_at: row.try_get("last_connected_at")?,
+                created_at: row.try_get("created_at")?,
+                updated_at: row.try_get("updated_at")?,
+            });
+        }
+        Ok(out)
+    }
+
+    pub async fn get_ssh_host(&self, id: &str) -> Result<SshHostDto, CoreError> {
+        let row = sqlx::query(
+            "SELECT id, name, host, port, username, auth_type, use_sudo, provisioned_user,
+                    last_banner, last_connected_at, created_at, updated_at
+             FROM ssh_hosts WHERE id = ? LIMIT 1",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or_else(|| CoreError::NotFound("SSH host not found.".to_string()))?;
+
+        let use_sudo: i64 = row.try_get("use_sudo")?;
+        Ok(SshHostDto {
+            id: row.try_get("id")?,
+            name: row.try_get("name")?,
+            host: row.try_get("host")?,
+            port: row.try_get("port")?,
+            username: row.try_get("username")?,
+            auth_type: row.try_get("auth_type")?,
+            use_sudo: use_sudo != 0,
+            provisioned_user: row.try_get("provisioned_user")?,
+            last_banner: row.try_get("last_banner")?,
+            last_connected_at: row.try_get("last_connected_at")?,
+            created_at: row.try_get("created_at")?,
+            updated_at: row.try_get("updated_at")?,
+        })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn create_ssh_host(
+        &self,
+        name: &str,
+        host: &str,
+        port: u16,
+        username: &str,
+        auth_type: &str,
+        use_sudo: bool,
+    ) -> Result<SshHostDto, CoreError> {
+        if name.trim().len() < 2 {
+            return Err(CoreError::Validation(
+                "SSH host name must be at least 2 characters.".to_string(),
+            ));
+        }
+        if host.trim().is_empty() || username.trim().is_empty() {
+            return Err(CoreError::Validation(
+                "Host and username are required.".to_string(),
+            ));
+        }
+        if !matches!(auth_type, "password" | "private_key") {
+            return Err(CoreError::Validation(
+                "Auth type must be 'password' or 'private_key'.".to_string(),
+            ));
+        }
+        let id = Uuid::now_v7().to_string();
+        let now = Utc::now().to_rfc3339();
+        sqlx::query(
+            "INSERT INTO ssh_hosts (id, name, host, port, username, auth_type, use_sudo, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&id)
+        .bind(name.trim())
+        .bind(host.trim())
+        .bind(port as i64)
+        .bind(username.trim())
+        .bind(auth_type)
+        .bind(if use_sudo { 1 } else { 0 })
+        .bind(&now)
+        .bind(&now)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| {
+            if e.to_string().contains("UNIQUE") {
+                CoreError::Conflict("An SSH host with that name already exists.".to_string())
+            } else {
+                CoreError::Database(e)
+            }
+        })?;
+        self.get_ssh_host(&id).await
+    }
+
+    pub async fn update_ssh_host_banner(&self, id: &str, banner: &str) -> Result<(), CoreError> {
+        let now = Utc::now().to_rfc3339();
+        sqlx::query(
+            "UPDATE ssh_hosts SET last_banner = ?, last_connected_at = ?, updated_at = ? WHERE id = ?",
+        )
+        .bind(banner)
+        .bind(&now)
+        .bind(&now)
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn update_ssh_host_provisioned_user(
+        &self,
+        id: &str,
+        username: &str,
+    ) -> Result<SshHostDto, CoreError> {
+        let now = Utc::now().to_rfc3339();
+        sqlx::query(
+            "UPDATE ssh_hosts SET username = ?, auth_type = 'password', use_sudo = 1, provisioned_user = ?, updated_at = ? WHERE id = ?",
+        )
+        .bind(username)
+        .bind(username)
+        .bind(&now)
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+        self.get_ssh_host(id).await
+    }
+
+    pub async fn delete_ssh_host(&self, id: &str) -> Result<(), CoreError> {
+        sqlx::query("DELETE FROM encrypted_secrets WHERE scope = 'ssh_host' AND reference_id = ?")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        sqlx::query("DELETE FROM ssh_hosts WHERE id = ?")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn list_projects(&self) -> Result<Vec<ProjectDto>, CoreError> {
+        let rows = sqlx::query(
+            "SELECT p.id, p.name, p.ssh_host_id, COALESCE(s.name, 'Unknown') AS ssh_host_name,
+                    p.repo_url, p.branch, p.deploy_path, p.deploy_command, p.compose_override,
+                    p.has_git_token, p.has_env_vars, p.last_deployed_commit, p.remote_head_commit,
+                    p.last_status, p.last_deployed_at, p.created_at, p.updated_at
+             FROM projects p
+             LEFT JOIN ssh_hosts s ON s.id = p.ssh_host_id
+             ORDER BY p.created_at DESC",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut out = Vec::with_capacity(rows.len());
+        for row in rows {
+            out.push(map_project_row(&row)?);
+        }
+        Ok(out)
+    }
+
+    pub async fn get_project(&self, id: &str) -> Result<ProjectDto, CoreError> {
+        let row = sqlx::query(
+            "SELECT p.id, p.name, p.ssh_host_id, COALESCE(s.name, 'Unknown') AS ssh_host_name,
+                    p.repo_url, p.branch, p.deploy_path, p.deploy_command, p.compose_override,
+                    p.has_git_token, p.has_env_vars, p.last_deployed_commit, p.remote_head_commit,
+                    p.last_status, p.last_deployed_at, p.created_at, p.updated_at
+             FROM projects p
+             LEFT JOIN ssh_hosts s ON s.id = p.ssh_host_id
+             WHERE p.id = ? LIMIT 1",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or_else(|| CoreError::NotFound("Project not found.".to_string()))?;
+
+        map_project_row(&row)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn create_project(
+        &self,
+        name: &str,
+        ssh_host_id: &str,
+        repo_url: &str,
+        branch: &str,
+        deploy_path: &str,
+        deploy_command: &str,
+        compose_override: Option<&str>,
+        has_git_token: bool,
+        has_env_vars: bool,
+    ) -> Result<ProjectDto, CoreError> {
+        if name.trim().len() < 2 {
+            return Err(CoreError::Validation(
+                "Project name must be at least 2 characters.".to_string(),
+            ));
+        }
+        if repo_url.trim().is_empty() || deploy_path.trim().is_empty() {
+            return Err(CoreError::Validation(
+                "Repository URL and deploy path are required.".to_string(),
+            ));
+        }
+        let id = Uuid::now_v7().to_string();
+        let now = Utc::now().to_rfc3339();
+        let branch_clean = if branch.trim().is_empty() { "main" } else { branch.trim() };
+        let cmd_clean = if deploy_command.trim().is_empty() {
+            "docker compose up -d --build"
+        } else {
+            deploy_command.trim()
+        };
+
+        sqlx::query(
+            "INSERT INTO projects (
+                id, name, ssh_host_id, repo_url, branch, deploy_path, deploy_command,
+                compose_override, has_git_token, has_env_vars, last_status, created_at, updated_at
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'idle', ?, ?)",
+        )
+        .bind(&id)
+        .bind(name.trim())
+        .bind(ssh_host_id)
+        .bind(repo_url.trim())
+        .bind(branch_clean)
+        .bind(deploy_path.trim())
+        .bind(cmd_clean)
+        .bind(compose_override.filter(|s| !s.trim().is_empty()))
+        .bind(if has_git_token { 1 } else { 0 })
+        .bind(if has_env_vars { 1 } else { 0 })
+        .bind(&now)
+        .bind(&now)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| {
+            if e.to_string().contains("UNIQUE") {
+                CoreError::Conflict("A project with that name already exists.".to_string())
+            } else {
+                CoreError::Database(e)
+            }
+        })?;
+
+        self.get_project(&id).await
+    }
+
+    pub async fn update_project_config(
+        &self,
+        id: &str,
+        branch: &str,
+        deploy_command: &str,
+        compose_override: Option<&str>,
+        has_git_token: Option<bool>,
+        has_env_vars: Option<bool>,
+    ) -> Result<ProjectDto, CoreError> {
+        let existing = self.get_project(id).await?;
+        let now = Utc::now().to_rfc3339();
+        sqlx::query(
+            "UPDATE projects
+             SET branch = ?, deploy_command = ?, compose_override = ?,
+                 has_git_token = ?, has_env_vars = ?, updated_at = ?
+             WHERE id = ?",
+        )
+        .bind(if branch.trim().is_empty() { &existing.branch } else { branch.trim() })
+        .bind(if deploy_command.trim().is_empty() { &existing.deploy_command } else { deploy_command.trim() })
+        .bind(compose_override.filter(|s| !s.trim().is_empty()))
+        .bind(if has_git_token.unwrap_or(existing.has_git_token) { 1 } else { 0 })
+        .bind(if has_env_vars.unwrap_or(existing.has_env_vars) { 1 } else { 0 })
+        .bind(&now)
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+        self.get_project(id).await
+    }
+
+    pub async fn update_project_git_status(
+        &self,
+        id: &str,
+        remote_head_commit: Option<&str>,
+        last_deployed_commit: Option<&str>,
+        last_status: Option<&str>,
+    ) -> Result<(), CoreError> {
+        let now = Utc::now().to_rfc3339();
+        if let Some(remote) = remote_head_commit {
+            sqlx::query("UPDATE projects SET remote_head_commit = ?, updated_at = ? WHERE id = ?")
+                .bind(remote)
+                .bind(&now)
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
+        }
+        if let Some(deployed) = last_deployed_commit {
+            sqlx::query(
+                "UPDATE projects SET last_deployed_commit = ?, last_deployed_at = ?, updated_at = ? WHERE id = ?",
+            )
+            .bind(deployed)
+            .bind(&now)
+            .bind(&now)
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        }
+        if let Some(st) = last_status {
+            sqlx::query("UPDATE projects SET last_status = ?, updated_at = ? WHERE id = ?")
+                .bind(st)
+                .bind(&now)
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
+        }
+        Ok(())
+    }
+
+    pub async fn delete_project(&self, id: &str) -> Result<(), CoreError> {
+        sqlx::query(
+            "DELETE FROM encrypted_secrets WHERE scope IN ('project_git_token', 'project_env') AND reference_id = ?",
+        )
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+        sqlx::query("DELETE FROM projects WHERE id = ?")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn create_project_deployment(
+        &self,
+        project_id: &str,
+        action: &str,
+        triggered_by: Option<&str>,
+    ) -> Result<String, CoreError> {
+        let id = Uuid::now_v7().to_string();
+        let now = Utc::now().to_rfc3339();
+        sqlx::query(
+            "INSERT INTO project_deployments (id, project_id, action, status, triggered_by, log_output, started_at)
+             VALUES (?, ?, ?, 'running', ?, '', ?)",
+        )
+        .bind(&id)
+        .bind(project_id)
+        .bind(action)
+        .bind(triggered_by)
+        .bind(&now)
+        .execute(&self.pool)
+        .await?;
+        Ok(id)
+    }
+
+    pub async fn finish_project_deployment(
+        &self,
+        deployment_id: &str,
+        status: &str,
+        commit_hash: Option<&str>,
+        log_output: &str,
+    ) -> Result<(), CoreError> {
+        let now = Utc::now().to_rfc3339();
+        sqlx::query(
+            "UPDATE project_deployments
+             SET status = ?, commit_hash = ?, log_output = ?, finished_at = ?
+             WHERE id = ?",
+        )
+        .bind(status)
+        .bind(commit_hash)
+        .bind(log_output)
+        .bind(&now)
+        .bind(deployment_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn list_project_deployments(
+        &self,
+        project_id: &str,
+        limit: i64,
+    ) -> Result<Vec<ProjectDeploymentDto>, CoreError> {
+        let rows = sqlx::query(
+            "SELECT id, project_id, action, status, commit_hash, triggered_by, log_output, started_at, finished_at
+             FROM project_deployments
+             WHERE project_id = ?
+             ORDER BY started_at DESC
+             LIMIT ?",
+        )
+        .bind(project_id)
+        .bind(limit.clamp(1, 50))
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut out = Vec::with_capacity(rows.len());
+        for row in rows {
+            out.push(ProjectDeploymentDto {
+                id: row.try_get("id")?,
+                project_id: row.try_get("project_id")?,
+                action: row.try_get("action")?,
+                status: row.try_get("status")?,
+                commit_hash: row.try_get("commit_hash")?,
+                triggered_by: row.try_get("triggered_by")?,
+                log_output: row.try_get("log_output")?,
+                started_at: row.try_get("started_at")?,
+                finished_at: row.try_get("finished_at")?,
+            });
+        }
+        Ok(out)
+    }
+}
+
+fn map_project_row(row: &sqlx::sqlite::SqliteRow) -> Result<ProjectDto, CoreError> {
+    let has_git_token: i64 = row.try_get("has_git_token")?;
+    let has_env_vars: i64 = row.try_get("has_env_vars")?;
+    let last_deployed_commit: Option<String> = row.try_get("last_deployed_commit")?;
+    let remote_head_commit: Option<String> = row.try_get("remote_head_commit")?;
+    let update_available = match (&last_deployed_commit, &remote_head_commit) {
+        (Some(d), Some(r)) => !d.is_empty() && !r.is_empty() && d != r,
+        (None, Some(r)) => !r.is_empty(),
+        _ => false,
+    };
+
+    Ok(ProjectDto {
+        id: row.try_get("id")?,
+        name: row.try_get("name")?,
+        ssh_host_id: row.try_get("ssh_host_id")?,
+        ssh_host_name: row.try_get("ssh_host_name")?,
+        repo_url: row.try_get("repo_url")?,
+        branch: row.try_get("branch")?,
+        deploy_path: row.try_get("deploy_path")?,
+        deploy_command: row.try_get("deploy_command")?,
+        compose_override: row.try_get("compose_override")?,
+        has_git_token: has_git_token != 0,
+        has_env_vars: has_env_vars != 0,
+        last_deployed_commit,
+        remote_head_commit,
+        update_available,
+        last_status: row.try_get("last_status")?,
+        last_deployed_at: row.try_get("last_deployed_at")?,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
+    })
 }
 
 fn apply_servers_filters<'a>(

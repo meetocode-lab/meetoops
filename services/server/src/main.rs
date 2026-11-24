@@ -6,6 +6,7 @@ mod monitoring_routes;
 mod ops_routes;
 mod phase5_routes;
 mod routes;
+mod ssh_projects_routes;
 mod state;
 
 use axum::http::{header, HeaderValue};
@@ -27,7 +28,8 @@ pub fn build_app(state: AppState, static_dir: &Path) -> Router {
         .merge(monitoring_routes::monitoring_router())
         .merge(explorer_routes::explorer_router())
         .merge(ops_routes::ops_router())
-        .merge(phase5_routes::phase5_router());
+        .merge(phase5_routes::phase5_router())
+        .merge(ssh_projects_routes::ssh_projects_router());
     let index_file = static_dir.join("index.html");
 
     let app = if index_file.exists() {
