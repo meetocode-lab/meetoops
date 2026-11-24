@@ -1,0 +1,16 @@
+[package]
+name = "meetoops-docker"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+meetoops-common.workspace = true
+meetoops-security.workspace = true
+bollard.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+futures-util.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
