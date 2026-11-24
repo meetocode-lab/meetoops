@@ -42,6 +42,7 @@ pub fn ssh_projects_router() -> Router<AppState> {
             "/api/v1/projects",
             get(api_list_projects).post(api_create_project),
         )
+        .route("/api/v1/projects/scan", post(api_scan_existing_projects))
         .route(
             "/api/v1/projects/{id}",
             patch(api_update_project).delete(api_delete_project),
@@ -937,4 +938,153 @@ async fn api_list_project_deployments(
     let _session = require_permission(&state, &headers, &method, Permission::DockerRead).await?;
     let list = state.store.list_project_deployments(&id, 20).await?;
     Ok(Json(ApiResponse::ok(list)))
+}
+
+#[derive(Deserialize)]
+struct ScanProjectsRequest {
+    ssh_host_id: String,
+    base_dir: Option<String>,
+}
+
+#[derive(Serialize)]
+struct ScanProjectsResponse {
+    scanned_dir: String,
+    found_count: usize,
+    imported_count: usize,
+    projects: Vec<meetoops_core::ProjectDto>,
+}
+
+fn strip_url_credentials(url: &str) -> String {
+    if let Some(rest) = url.strip_prefix("https://") {
+        if let Some((_creds, host_part)) = rest.split_once('@') {
+            return format!("https://{host_part}");
+        }
+    }
+    url.to_string()
+}
+
+/// Scans an existing directory on the target SSH host (e.g. `/home/app`) for Git repositories,
+/// extracts origin URL, active branch, and HEAD commit, and imports any new ones into Projects.
+async fn api_scan_existing_projects(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    method: Method,
+    Json(payload): Json<ScanProjectsRequest>,
+) -> Result<Json<ApiResponse<ScanProjectsResponse>>, ApiError> {
+    let session = require_permission(&state, &headers, &method, Permission::DockerOperate).await?;
+    let (_host, cfg) = load_ssh_config(&state, &payload.ssh_host_id).await?;
+    let base_dir = payload
+        .base_dir
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or("/home/app");
+
+    let script = format!(
+        "for g in $(find {} -maxdepth 3 -name .git -type d 2>/dev/null); do \
+           dir=$(dirname \"$g\"); \
+           name=$(basename \"$dir\"); \
+           url=$(git -C \"$dir\" remote get-url origin 2>/dev/null || echo ''); \
+           branch=$(git -C \"$dir\" rev-parse --abbrev-ref HEAD 2>/dev/null || echo 'main'); \
+           commit=$(git -C \"$dir\" rev-parse --short=12 HEAD 2>/dev/null || echo ''); \
+           has_env=0; [ -f \"$dir/.env\" ] && has_env=1; \
+           echo \"$name|$dir|$url|$branch|$commit|$has_env\"; \
+         done",
+        shell_escape(base_dir)
+    );
+
+    let out = exec_command(&cfg, &script, None, Duration::from_secs(25))
+        .await
+        .map_err(map_ssh_err)?;
+
+    let existing = state.store.list_projects().await?;
+    let mut found_count = 0usize;
+    let mut imported_count = 0usize;
+
+    for line in out.stdout.lines() {
+        let parts: Vec<&str> = line.trim().split('|').collect();
+        if parts.len() < 6 {
+            continue;
+        }
+        let name = parts[0].trim();
+        let dir = parts[1].trim();
+        let raw_url = parts[2].trim();
+        let branch = parts[3].trim();
+        let commit = parts[4].trim();
+        let has_env = parts[5].trim() == "1";
+
+        if name.is_empty() || dir.is_empty() || raw_url.is_empty() {
+            continue;
+        }
+        found_count += 1;
+
+        let clean_url = strip_url_credentials(raw_url);
+        if let Some(prev) = existing
+            .iter()
+            .find(|p| p.deploy_path == dir && p.ssh_host_id == payload.ssh_host_id)
+        {
+            if !commit.is_empty() {
+                let _ = state
+                    .store
+                    .update_project_git_status(&prev.id, None, Some(commit), None)
+                    .await;
+            }
+            continue;
+        }
+
+        // Ensure unique project name if same folder name exists on another host
+        let unique_name = if existing.iter().any(|p| p.name.eq_ignore_ascii_case(name)) {
+            format!("{name}-{}", &payload.ssh_host_id.chars().take(6).collect::<String>())
+        } else {
+            name.to_string()
+        };
+
+        if let Ok(created) = state
+            .store
+            .create_project(
+                &unique_name,
+                &payload.ssh_host_id,
+                &clean_url,
+                if branch.is_empty() || branch == "HEAD" { "main" } else { branch },
+                dir,
+                "docker compose up -d --build",
+                None,
+                false,
+                has_env,
+            )
+            .await
+        {
+            if !commit.is_empty() {
+                let _ = state
+                    .store
+                    .update_project_git_status(&created.id, None, Some(commit), Some("running"))
+                    .await;
+            }
+            imported_count += 1;
+        }
+    }
+
+    let ip = client_ip(&headers, state.config.trust_proxy);
+    state
+        .store
+        .write_audit_log(
+            Some(&session.user.id),
+            Some(&session.user.email),
+            "project.scan_existing",
+            "container",
+            Some(&payload.ssh_host_id),
+            None,
+            "success",
+            Some(&ip),
+            serde_json::json!({ "base_dir": base_dir, "found": found_count, "imported": imported_count }),
+        )
+        .await?;
+
+    let projects = state.store.list_projects().await?;
+    Ok(Json(ApiResponse::ok(ScanProjectsResponse {
+        scanned_dir: base_dir.to_string(),
+        found_count,
+        imported_count,
+        projects,
+    })))
 }

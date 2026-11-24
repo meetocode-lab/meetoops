@@ -1004,6 +1004,16 @@ export const api = {
       method: 'DELETE',
     }),
   listProjects: () => request<ProjectDto[]>('/api/v1/projects'),
+  scanExistingProjects: (ssh_host_id: string, base_dir = '/home/app') =>
+    request<{
+      scanned_dir: string;
+      found_count: number;
+      imported_count: number;
+      projects: ProjectDto[];
+    }>('/api/v1/projects/scan', {
+      method: 'POST',
+      body: JSON.stringify({ ssh_host_id, base_dir }),
+    }),
   createProject: (body: {
     name: string;
     ssh_host_id: string;

@@ -25,6 +25,7 @@
     Loader2,
     CheckCircle2,
     ArrowUpCircle,
+    FolderSearch,
   } from 'lucide-svelte';
 
   interface Props {
@@ -42,6 +43,12 @@
   let errorMsg = $state<string | null>(null);
   let busyProjectId = $state<string | null>(null);
   let checkingId = $state<string | null>(null);
+
+  // Scan Existing Repos Drawer
+  let showScan = $state(false);
+  let scanHostId = $state('');
+  let scanBaseDir = $state('/home/app');
+  let scanning = $state(false);
 
   // Create Project Drawer
   let showCreate = $state(false);
@@ -81,6 +88,9 @@
       if (!pSshHostId && hosts.length > 0) {
         pSshHostId = hosts[0].id;
       }
+      if (!scanHostId && hosts.length > 0) {
+        scanHostId = hosts[0].id;
+      }
     } catch (err) {
       errorMsg = err instanceof Error ? err.message : 'Failed to load projects.';
     } finally {
@@ -91,6 +101,40 @@
   $effect(() => {
     loadAll();
   });
+
+  async function handleScanExisting(e: SubmitEvent) {
+    e.preventDefault();
+    if (!scanHostId) {
+      toast.warning('Select an SSH host first');
+      return;
+    }
+    scanning = true;
+    errorMsg = null;
+    try {
+      const res = await api.scanExistingProjects(scanHostId, scanBaseDir.trim() || '/home/app');
+      projects = res.projects;
+      if (res.imported_count > 0) {
+        toast.success(
+          `Imported ${res.imported_count} existing repo(s)`,
+          `Found ${res.found_count} Git repo(s) in ${res.scanned_dir}`,
+        );
+      } else if (res.found_count > 0) {
+        toast.info(
+          'All repos already imported',
+          `Found ${res.found_count} Git repo(s) in ${res.scanned_dir}`,
+        );
+      } else {
+        toast.warning('No Git repositories found', `Scanned ${res.scanned_dir} (depth 3)`);
+      }
+      showScan = false;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to scan existing folders.';
+      errorMsg = msg;
+      toast.error('Scan failed', msg);
+    } finally {
+      scanning = false;
+    }
+  }
 
   async function handleCreate(e: SubmitEvent) {
     e.preventDefault();
@@ -289,6 +333,14 @@
       {#if canOperate}
         <button
           type="button"
+          onclick={() => (showScan = !showScan)}
+          class="h-[34px] px-3 rounded-[var(--radius-md)] bg-[var(--surface)] hover:bg-[var(--surface-elevated)] border border-[var(--border-strong)] text-xs font-medium inline-flex items-center gap-1.5"
+        >
+          <FolderSearch class="w-3.5 h-3.5 text-[var(--primary)]" />
+          {lang === 'id' ? 'Scan Folder Existing' : 'Scan Existing Repos'}
+        </button>
+        <button
+          type="button"
           onclick={() => (showCreate = !showCreate)}
           class="h-[34px] px-3 rounded-[var(--radius-md)] bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-[var(--primary-foreground)] text-xs font-medium inline-flex items-center gap-1.5"
         >
@@ -328,6 +380,57 @@
       <AlertCircle class="w-4 h-4 shrink-0" />
       <span>{errorMsg}</span>
     </div>
+  {/if}
+
+  {#if showScan}
+    <form
+      onsubmit={handleScanExisting}
+      class="w-full p-5 rounded-[var(--radius-md)] bg-[var(--surface)] border border-[var(--border-strong)] space-y-3"
+    >
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-sm font-semibold text-[var(--foreground)] flex items-center gap-2">
+            <FolderSearch class="w-4 h-4 text-[var(--primary)]" />
+            {lang === 'id' ? 'Scan Folder GitHub Existing di Server' : 'Scan Existing GitHub Folders on Server'}
+          </h2>
+          <p class="text-xs text-[var(--muted-foreground)] mt-0.5">
+            Automatically detects existing <code class="font-mono">.git</code> repositories (origin URL, active branch, HEAD commit, and <code class="font-mono">.env</code>) up to 3 levels deep.
+          </p>
+        </div>
+        <button type="button" onclick={() => (showScan = false)} class="text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
+          <X class="w-4 h-4" />
+        </button>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+        <div class="md:col-span-4 space-y-1">
+          <span class="text-[11px] text-[var(--muted-foreground)] block">Target SSH Host</span>
+          <Select
+            class="w-full"
+            bind:value={scanHostId}
+            placeholder="Select SSH host…"
+            options={sshHosts.map((h) => ({ value: h.id, label: h.name, description: `${h.username}@${h.host}:${h.port}` }))}
+          />
+        </div>
+        <label class="md:col-span-5 space-y-1">
+          <span class="text-[11px] text-[var(--muted-foreground)]">Base Directory on Server</span>
+          <input
+            type="text"
+            required
+            bind:value={scanBaseDir}
+            placeholder="/home/app"
+            class="w-full px-3 rounded-[var(--radius-md)] bg-[var(--background)] border border-[var(--border-strong)] font-mono text-xs"
+          />
+        </label>
+        <button
+          type="submit"
+          disabled={scanning || !scanHostId}
+          class="md:col-span-3 h-[34px] px-4 rounded-[var(--radius-md)] bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-[var(--primary-foreground)] text-xs font-medium inline-flex items-center justify-center gap-1.5 disabled:opacity-50"
+        >
+          {#if scanning}<Loader2 class="w-3.5 h-3.5 animate-spin" />{:else}<FolderSearch class="w-3.5 h-3.5" />{/if}
+          {scanning ? 'Scanning…' : 'Scan & Import'}
+        </button>
+      </div>
+    </form>
   {/if}
 
   {#if showCreate}
