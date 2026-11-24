@@ -479,6 +479,54 @@ export interface AlertsSummaryDto {
   acknowledged: number;
 }
 
+export interface SshHostDto {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  username: string;
+  auth_type: 'password' | 'private_key';
+  use_sudo: boolean;
+  provisioned_user: string | null;
+  last_banner: string | null;
+  last_connected_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectDto {
+  id: string;
+  name: string;
+  ssh_host_id: string;
+  ssh_host_name: string;
+  repo_url: string;
+  branch: string;
+  deploy_path: string;
+  deploy_command: string;
+  compose_override: string | null;
+  has_git_token: boolean;
+  has_env_vars: boolean;
+  last_deployed_commit: string | null;
+  remote_head_commit: string | null;
+  update_available: boolean;
+  last_status: string;
+  last_deployed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectDeploymentDto {
+  id: string;
+  project_id: string;
+  action: string;
+  status: string;
+  commit_hash: string | null;
+  triggered_by: string | null;
+  log_output: string;
+  started_at: string;
+  finished_at: string | null;
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   if (init.body && !headers.has('Content-Type')) {
@@ -915,4 +963,95 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(bundle),
     }),
+  // Phase 6: Host SSH Terminal & GitHub Projects Deploy
+  listSshHosts: () => request<SshHostDto[]>('/api/v1/ssh/hosts'),
+  createSshHost: (body: {
+    name: string;
+    host: string;
+    port?: number;
+    username: string;
+    auth_type: 'password' | 'private_key';
+    password?: string;
+    private_key_pem?: string;
+    passphrase?: string;
+    use_sudo?: boolean;
+  }) =>
+    request<{ host: SshHostDto; verified: boolean; banner: string | null; verify_error: string | null }>(
+      '/api/v1/ssh/hosts',
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+      },
+    ),
+  testSshHost: (id: string) =>
+    request<{ connected: boolean; banner: string }>(
+      `/api/v1/ssh/hosts/${encodeURIComponent(id)}/test`,
+      { method: 'POST' },
+    ),
+  provisionSshUser: (
+    id: string,
+    body: { linux_username?: string; password: string; add_docker_group?: boolean },
+  ) =>
+    request<{ host: SshHostDto; linux_username: string; id_output: string }>(
+      `/api/v1/ssh/hosts/${encodeURIComponent(id)}/provision-user`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+      },
+    ),
+  deleteSshHost: (id: string) =>
+    request<{ deleted: boolean }>(`/api/v1/ssh/hosts/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+  listProjects: () => request<ProjectDto[]>('/api/v1/projects'),
+  createProject: (body: {
+    name: string;
+    ssh_host_id: string;
+    repo_url: string;
+    branch?: string;
+    deploy_path: string;
+    deploy_command?: string;
+    compose_override?: string;
+    git_token?: string;
+    env_content?: string;
+  }) =>
+    request<ProjectDto>('/api/v1/projects', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  updateProject: (
+    id: string,
+    body: {
+      branch?: string;
+      deploy_command?: string;
+      compose_override?: string;
+      git_token?: string;
+      env_content?: string;
+    },
+  ) =>
+    request<ProjectDto>(`/api/v1/projects/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  revealProjectEnv: (id: string) =>
+    request<{ env_content: string }>(`/api/v1/projects/${encodeURIComponent(id)}/env`),
+  deleteProject: (id: string) =>
+    request<{ deleted: boolean }>(`/api/v1/projects/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+  checkProjectRemote: (id: string) =>
+    request<ProjectDto>(`/api/v1/projects/${encodeURIComponent(id)}/check-remote`, {
+      method: 'POST',
+    }),
+  deployProject: (id: string) =>
+    request<ProjectDeploymentDto>(`/api/v1/projects/${encodeURIComponent(id)}/deploy`, {
+      method: 'POST',
+    }),
+  projectAction: (id: string, action: 'restart' | 'stop' | 'logs') =>
+    request<ProjectDeploymentDto>(
+      `/api/v1/projects/${encodeURIComponent(id)}/action/${action}`,
+      { method: 'POST' },
+    ),
+  listProjectDeployments: (id: string) =>
+    request<ProjectDeploymentDto[]>(`/api/v1/projects/${encodeURIComponent(id)}/deployments`),
 };

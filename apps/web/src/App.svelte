@@ -34,6 +34,7 @@
   import RedisExplorerView from './components/RedisExplorerView.svelte';
   import TerminalView from './components/TerminalView.svelte';
   import StacksView from './components/StacksView.svelte';
+  import ProjectsView from './components/ProjectsView.svelte';
   import ServersView from './components/ServersView.svelte';
   import AlertsView from './components/AlertsView.svelte';
   import {
@@ -45,6 +46,7 @@
     HardDrive,
     Network,
     FileCode2,
+    GitBranch,
     Radar,
     Database,
     KeyRound,
@@ -68,6 +70,7 @@
     | 'volumes'
     | 'networks'
     | 'stacks'
+    | 'projects'
     | 'discovery'
     | 'databases'
     | 'redis'
@@ -85,6 +88,7 @@
     'volumes',
     'networks',
     'stacks',
+    'projects',
     'discovery',
     'databases',
     'redis',
@@ -148,6 +152,7 @@
     volumes: 'Volumes',
     networks: 'Networks',
     stacks: 'Compose Stacks',
+    projects: 'Projects & Deploy',
     discovery: 'Service Discovery',
     databases: 'Database Explorer',
     redis: 'Redis Explorer',
@@ -292,6 +297,7 @@
         { key: 'volumes' as PageKey, label: t.nav.volumes, icon: HardDrive },
         { key: 'networks' as PageKey, label: t.nav.networks, icon: Network },
         { key: 'stacks' as PageKey, label: t.nav.stacks, icon: FileCode2 },
+        { key: 'projects' as PageKey, label: lang === 'id' ? 'Proyek GitHub' : 'Projects & Deploy', icon: GitBranch },
       ],
     },
     {
@@ -597,10 +603,18 @@
           <TerminalView
             {lang}
             canExec={session.permissions.includes('terminal:exec')}
+            currentUsername={session.user.username ?? session.user.full_name}
             initialContainerId={selectedTerminalContainerId}
           />
         {:else if activePage === 'stacks'}
           <StacksView {lang} canOperate={session.permissions.includes('docker:operate')} />
+        {:else if activePage === 'projects'}
+          <ProjectsView
+            {lang}
+            canOperate={session.permissions.includes('docker:operate')}
+            canDelete={session.permissions.includes('docker:delete')}
+            onOpenTerminal={() => navigate('terminal')}
+          />
         {:else if activePage === 'servers'}
           <ServersView
             {lang}
