@@ -99,6 +99,7 @@ fn resolve_reachable_host(host: &str) -> String {
     let trimmed = host.trim();
     if std::path::Path::new("/.dockerenv").exists()
         && matches!(trimmed, "127.0.0.1" | "localhost" | "::1")
+        && std::net::ToSocketAddrs::to_socket_addrs(&("host.docker.internal", 80)).is_ok()
     {
         "host.docker.internal".to_string()
     } else {
