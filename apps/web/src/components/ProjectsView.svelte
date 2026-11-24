@@ -57,7 +57,7 @@
   let pRepoUrl = $state('');
   let pBranch = $state('main');
   let pDeployPath = $state('/home/app/');
-  let pDeployCmd = $state('docker compose up -d --build');
+  let pDeploySteps = $state<string[]>(['docker compose up -d --build']);
   let pGitToken = $state('');
   let pEnvContent = $state('');
   let pComposeOverride = $state('');
@@ -66,11 +66,34 @@
   // Edit Config / .env Drawer
   let editingProject = $state<ProjectDto | null>(null);
   let editBranch = $state('');
-  let editCmd = $state('');
+  let editSteps = $state<string[]>(['docker compose up -d --build']);
   let editCompose = $state('');
   let editGitToken = $state('');
   let editEnv = $state('');
   let savingEdit = $state(false);
+
+  const commandPresets = [
+    { label: 'Docker Compose', cmd: 'docker compose up -d --build' },
+    { label: 'Laravel Migrate', cmd: 'docker compose exec -T app php artisan migrate --force' },
+    { label: 'Laravel Cache', cmd: 'docker compose exec -T app php artisan optimize' },
+    { label: 'Node / Bun Build', cmd: 'bun install && bun run build' },
+    { label: 'PM2 Reload', cmd: 'pm2 reload all' },
+  ];
+
+  function stepsToCommand(steps: string[]): string {
+    return steps
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0)
+      .join('\n');
+  }
+
+  function commandToSteps(cmd: string): string[] {
+    const lines = cmd
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+    return lines.length > 0 ? lines : ['docker compose up -d --build'];
+  }
 
   // Deployment Logs Drawer
   let logProject = $state<ProjectDto | null>(null);
@@ -151,7 +174,7 @@
         repo_url: pRepoUrl.trim(),
         branch: pBranch.trim() || 'main',
         deploy_path: pDeployPath.trim(),
-        deploy_command: pDeployCmd.trim() || 'docker compose up -d --build',
+        deploy_command: stepsToCommand(pDeploySteps) || 'docker compose up -d --build',
         compose_override: pComposeOverride.trim() || undefined,
         git_token: pGitToken.trim() || undefined,
         env_content: pEnvContent.trim() || undefined,
@@ -162,7 +185,7 @@
       pRepoUrl = '';
       pBranch = 'main';
       pDeployPath = '/home/app/';
-      pDeployCmd = 'docker compose up -d --build';
+      pDeploySteps = ['docker compose up -d --build'];
       pGitToken = '';
       pEnvContent = '';
       pComposeOverride = '';
@@ -179,7 +202,7 @@
   async function openEdit(p: ProjectDto) {
     editingProject = p;
     editBranch = p.branch;
-    editCmd = p.deploy_command;
+    editSteps = commandToSteps(p.deploy_command);
     editCompose = p.compose_override ?? '';
     editGitToken = '';
     editEnv = '';
@@ -201,7 +224,7 @@
     try {
       await api.updateProject(editingProject.id, {
         branch: editBranch.trim(),
-        deploy_command: editCmd.trim(),
+        deploy_command: stepsToCommand(editSteps) || 'docker compose up -d --build',
         compose_override: editCompose,
         git_token: editGitToken.trim() || undefined,
         env_content: editEnv,
@@ -471,14 +494,62 @@
           <span class="text-[11px] text-[var(--muted-foreground)]">GitHub PAT (optional, private repos)</span>
           <input type="password" placeholder="ghp_xxxxxxxx" bind:value={pGitToken} class="w-full px-3 rounded-[var(--radius-md)] bg-[var(--background)] border border-[var(--border-strong)] font-mono text-xs" />
         </label>
-        <label class="space-y-1">
+        <label class="md:col-span-3 space-y-1">
           <span class="text-[11px] text-[var(--muted-foreground)]">Deploy Directory on Server</span>
           <input type="text" required placeholder="/home/app/my-saas-api" bind:value={pDeployPath} class="w-full px-3 rounded-[var(--radius-md)] bg-[var(--background)] border border-[var(--border-strong)] font-mono text-xs" />
         </label>
-        <label class="md:col-span-2 space-y-1">
-          <span class="text-[11px] text-[var(--muted-foreground)]">Deploy Command</span>
-          <input type="text" required bind:value={pDeployCmd} class="w-full px-3 rounded-[var(--radius-md)] bg-[var(--background)] border border-[var(--border-strong)] font-mono text-xs" />
-        </label>
+      </div>
+
+      <!-- Multi-Step Post-Pull Deploy Pipeline -->
+      <div class="space-y-2 p-3.5 rounded-[var(--radius-md)] bg-[var(--background)] border border-[var(--border)]">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <span class="text-xs font-semibold text-[var(--foreground)]">Post-Pull Deploy Commands (Sequential)</span>
+            <p class="text-[11px] text-[var(--muted-foreground)]">Runs automatically after <code class="font-mono">git pull</code> & <code class="font-mono">.env</code> sync (stops on first error).</p>
+          </div>
+          <button
+            type="button"
+            onclick={() => (pDeploySteps = [...pDeploySteps, ''])}
+            class="h-[30px] px-2.5 rounded bg-[var(--primary-subtle)] text-[var(--primary)] text-[11px] font-medium inline-flex items-center gap-1"
+          >
+            <Plus class="w-3 h-3" /> Add Command
+          </button>
+        </div>
+        <div class="space-y-2">
+          {#each pDeploySteps as _, idx}
+            <div class="flex items-center gap-2">
+              <span class="w-14 shrink-0 text-[11px] font-mono text-[var(--muted-foreground)]">Step {idx + 1}</span>
+              <input
+                type="text"
+                bind:value={pDeploySteps[idx]}
+                placeholder="e.g. docker compose up -d --build"
+                class="flex-1 px-3 rounded-[var(--radius-md)] bg-[var(--surface)] border border-[var(--border-strong)] font-mono text-xs"
+              />
+              {#if pDeploySteps.length > 1}
+                <button
+                  type="button"
+                  onclick={() => (pDeploySteps = pDeploySteps.filter((_, i) => i !== idx))}
+                  class="h-[34px] w-[34px] inline-flex items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--danger)] hover:bg-[var(--danger-subtle)]"
+                  title="Remove step"
+                >
+                  <X class="w-3.5 h-3.5" />
+                </button>
+              {/if}
+            </div>
+          {/each}
+        </div>
+        <div class="flex flex-wrap items-center gap-1.5 pt-1">
+          <span class="text-[10px] uppercase tracking-wider text-[var(--muted-foreground)] mr-1">Quick Add:</span>
+          {#each commandPresets as preset}
+            <button
+              type="button"
+              onclick={() => (pDeploySteps = [...pDeploySteps.filter((s) => s.trim()), preset.cmd])}
+              class="px-2 py-0.5 rounded bg-[var(--surface)] hover:bg-[var(--surface-elevated)] border border-[var(--border)] text-[11px] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+            >
+              + {preset.label}
+            </button>
+          {/each}
+        </div>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -662,19 +733,67 @@
           <X class="w-4 h-4" />
         </button>
       </div>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <label class="space-y-1">
           <span class="text-[11px] text-[var(--muted-foreground)]">Branch</span>
           <input type="text" bind:value={editBranch} class="w-full px-3 rounded-[var(--radius-md)] bg-[var(--background)] border border-[var(--border-strong)] font-mono text-xs" />
         </label>
         <label class="space-y-1">
-          <span class="text-[11px] text-[var(--muted-foreground)]">Deploy Command</span>
-          <input type="text" bind:value={editCmd} class="w-full px-3 rounded-[var(--radius-md)] bg-[var(--background)] border border-[var(--border-strong)] font-mono text-xs" />
-        </label>
-        <label class="space-y-1">
           <span class="text-[11px] text-[var(--muted-foreground)]">Update GitHub PAT (leave blank to keep)</span>
           <input type="password" bind:value={editGitToken} placeholder="ghp_..." class="w-full px-3 rounded-[var(--radius-md)] bg-[var(--background)] border border-[var(--border-strong)] font-mono text-xs" />
         </label>
+      </div>
+
+      <!-- Multi-Step Post-Pull Deploy Pipeline (Edit) -->
+      <div class="space-y-2 p-3.5 rounded-[var(--radius-md)] bg-[var(--background)] border border-[var(--border)]">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <span class="text-xs font-semibold text-[var(--foreground)]">Post-Pull Deploy Commands (Sequential)</span>
+            <p class="text-[11px] text-[var(--muted-foreground)]">Each command runs in order after <code class="font-mono">git pull</code> & <code class="font-mono">.env</code> sync.</p>
+          </div>
+          <button
+            type="button"
+            onclick={() => (editSteps = [...editSteps, ''])}
+            class="h-[30px] px-2.5 rounded bg-[var(--primary-subtle)] text-[var(--primary)] text-[11px] font-medium inline-flex items-center gap-1"
+          >
+            <Plus class="w-3 h-3" /> Add Command
+          </button>
+        </div>
+        <div class="space-y-2">
+          {#each editSteps as _, idx}
+            <div class="flex items-center gap-2">
+              <span class="w-14 shrink-0 text-[11px] font-mono text-[var(--muted-foreground)]">Step {idx + 1}</span>
+              <input
+                type="text"
+                bind:value={editSteps[idx]}
+                placeholder="e.g. docker compose up -d --build"
+                class="flex-1 px-3 rounded-[var(--radius-md)] bg-[var(--surface)] border border-[var(--border-strong)] font-mono text-xs"
+              />
+              {#if editSteps.length > 1}
+                <button
+                  type="button"
+                  onclick={() => (editSteps = editSteps.filter((_, i) => i !== idx))}
+                  class="h-[34px] w-[34px] inline-flex items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--danger)] hover:bg-[var(--danger-subtle)]"
+                  title="Remove step"
+                >
+                  <X class="w-3.5 h-3.5" />
+                </button>
+              {/if}
+            </div>
+          {/each}
+        </div>
+        <div class="flex flex-wrap items-center gap-1.5 pt-1">
+          <span class="text-[10px] uppercase tracking-wider text-[var(--muted-foreground)] mr-1">Quick Add:</span>
+          {#each commandPresets as preset}
+            <button
+              type="button"
+              onclick={() => (editSteps = [...editSteps.filter((s) => s.trim()), preset.cmd])}
+              class="px-2 py-0.5 rounded bg-[var(--surface)] hover:bg-[var(--surface-elevated)] border border-[var(--border)] text-[11px] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+            >
+              + {preset.label}
+            </button>
+          {/each}
+        </div>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <label class="space-y-1">

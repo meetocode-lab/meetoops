@@ -811,11 +811,19 @@ async fn api_deploy_project(
         }
     }
 
-    script.push_str(&format!(
-        "{}\n\
-         echo \"__MEETOOPS_COMMIT__=$(git rev-parse --short=12 HEAD)\"\n",
-        project.deploy_command
-    ));
+    let steps: Vec<&str> = project
+        .deploy_command
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .collect();
+
+    for (idx, step) in steps.iter().enumerate() {
+        let banner = format!("=== [Step {}/{}] {} ===", idx + 1, steps.len(), step);
+        script.push_str(&format!("echo {}\n{}\n", shell_escape(&banner), step));
+    }
+
+    script.push_str("echo \"__MEETOOPS_COMMIT__=$(git rev-parse --short=12 HEAD)\"\n");
 
     let exec_res = exec_command(&cfg, &script, None, Duration::from_secs(300)).await;
     let (status, commit_hash, log_output) = match exec_res {
