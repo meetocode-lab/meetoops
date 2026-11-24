@@ -1,0 +1,12 @@
+.git
+.meetoops-dev
+.meetoops-agent.json
+target
+apps/web/node_modules
+apps/web/dist
+*.db
+*.db-wal
+*.db-shm
+*.key
+.env
+.env.*
