@@ -19,7 +19,8 @@
   import DateRangePicker from './ui/DateRangePicker.svelte';
   import PaginationBar from './ui/PaginationBar.svelte';
   import SortHeader from './ui/SortHeader.svelte';
-  import { ShieldCheck, CheckCircle2, AlertCircle, Trash2, Plus, Radio, Search, KeyRound, Download, Upload, DatabaseBackup, Copy, Check } from 'lucide-svelte';
+  import ExplorerTabs from './ui/ExplorerTabs.svelte';
+  import { ShieldCheck, CheckCircle2, AlertCircle, Trash2, Plus, Radio, Search, KeyRound, Download, Upload, DatabaseBackup, Copy, Check, SlidersHorizontal, Users, ScrollText } from 'lucide-svelte';
 
   interface Props {
     lang: Language;
@@ -344,25 +345,6 @@
     <p class="text-xs text-[var(--muted-foreground)] mt-0.5">{t.settings.subtitle}</p>
   </div>
 
-  <!-- Tabs -->
-  <div class="flex gap-1 border-b border-[var(--border)]">
-    {#each [
-      { id: 'general', label: t.settings.tabGeneral },
-      { id: 'users', label: t.settings.tabUsers },
-      { id: 'security', label: t.settings.tabSecurity },
-      { id: 'backup', label: 'Backup & Restore' },
-      { id: 'audit', label: t.settings.tabAudit },
-    ] as item}
-      <button
-        type="button"
-        onclick={() => (tab = item.id as typeof tab)}
-        class="px-3.5 py-2 text-xs font-medium border-b-2 transition-colors {tab === item.id ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}"
-      >
-        {item.label}
-      </button>
-    {/each}
-  </div>
-
   {#if errorMsg}
     <div class="flex items-center gap-2 p-3 rounded-[var(--radius-md)] bg-[var(--danger-subtle)] border border-[var(--danger)]/40 text-[var(--danger)] text-xs">
       <AlertCircle class="w-4 h-4 shrink-0" />
@@ -376,6 +358,17 @@
     </div>
   {/if}
 
+  <ExplorerTabs
+    bind:active={tab}
+    bodyClass="p-5 space-y-4"
+    tabs={[
+      { id: 'general', label: t.settings.tabGeneral, icon: SlidersHorizontal },
+      { id: 'users', label: t.settings.tabUsers, icon: Users },
+      { id: 'security', label: t.settings.tabSecurity, icon: ShieldCheck },
+      { id: 'backup', label: 'Backup & Restore', icon: DatabaseBackup },
+      { id: 'audit', label: t.settings.tabAudit, icon: ScrollText },
+    ]}
+  >
   {#if tab === 'general' && data}
     <form onsubmit={handleSaveSettings} class="space-y-5 w-full">
       <div class="p-5 rounded-[var(--radius-md)] bg-[var(--surface)] border border-[var(--border)] grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -881,4 +874,5 @@
       </div>
     </div>
   {/if}
+  </ExplorerTabs>
 </div>

@@ -16,11 +16,12 @@
   --sky: #7dd3fc;
 
   /* Background & Surfaces */
-  --background: #f8fbff;
+  --background: #f5f9ff;
   --sidebar: #ffffff;
   --surface: #ffffff;
-  --surface-secondary: #eff6ff;
-  --surface-elevated: #f1f7ff;
+  --surface-secondary: #edf4ff;
+  --surface-elevated: #e6f0ff;
+  --tab-track: #e6effc;
 
   /* Border */
   --border: #dbeafe;
@@ -74,6 +75,7 @@
   --surface: #0d1d33;
   --surface-secondary: #132742;
   --surface-elevated: #193252;
+  --tab-track: #06101f;
 
   /* Border */
   --border: #1e3552;
@@ -130,6 +132,43 @@
 
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+/* Browser Surface Polish (selection, focus, caret) */
+::selection {
+  background-color: color-mix(in srgb, var(--primary) 22%, transparent);
+  color: var(--foreground);
+}
+
+:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ring) 70%, transparent);
+  outline-offset: 1px;
+}
+
+input,
+textarea {
+  caret-color: var(--primary);
+}
+
+/* File Explorer Connected Tab Fillets */
+.explorer-tab-active::before,
+.explorer-tab-active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  width: 8px;
+  height: 8px;
+  pointer-events: none;
+}
+
+.explorer-tab-active::before {
+  left: -8px;
+  background: radial-gradient(circle at 0 0, transparent 8px, var(--surface) 8.5px);
+}
+
+.explorer-tab-active::after {
+  right: -8px;
+  background: radial-gradient(circle at 100% 0, transparent 8px, var(--surface) 8.5px);
 }
 
 /* Blue Aurora Scrollbars */

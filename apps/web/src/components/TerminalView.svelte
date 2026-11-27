@@ -9,6 +9,7 @@
   import { toast } from '../lib/toast.svelte';
   import Select from './ui/Select.svelte';
   import Checkbox from './ui/Checkbox.svelte';
+  import ExplorerTabs from './ui/ExplorerTabs.svelte';
   import {
     Terminal,
     Plug,
@@ -295,35 +296,20 @@
         Built-in Host SSH client (Termius replacement with auto-sudo user provisioning) & interactive Docker exec.
       </p>
     </div>
-
-    <div class="flex items-center gap-1 p-1 rounded-[var(--radius-md)] bg-[var(--surface)] border border-[var(--border-strong)]">
-      <button
-        type="button"
-        onclick={() => {
-          disconnect();
-          mode = 'ssh';
-        }}
-        class="px-3 py-1 rounded text-xs font-medium inline-flex items-center gap-1.5 transition-colors {mode === 'ssh'
-          ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
-          : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}"
-      >
-        <Server class="w-3.5 h-3.5" /> Host SSH
-      </button>
-      <button
-        type="button"
-        onclick={() => {
-          disconnect();
-          mode = 'container';
-        }}
-        class="px-3 py-1 rounded text-xs font-medium inline-flex items-center gap-1.5 transition-colors {mode === 'container'
-          ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
-          : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}"
-      >
-        <Box class="w-3.5 h-3.5" /> Container Exec
-      </button>
-    </div>
   </div>
 
+  <!-- Connected File-Explorer Mode Tabs -->
+  <div class="rounded-[var(--radius-lg)] bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-sm)] overflow-hidden">
+    <ExplorerTabs
+      framed={false}
+      bind:active={mode}
+      onChange={() => disconnect()}
+      tabs={[
+        { id: 'ssh', label: 'Host SSH', icon: Server, badge: sshHosts.length > 0 ? sshHosts.length : undefined },
+        { id: 'container', label: 'Container Exec', icon: Box, badge: containers.length > 0 ? containers.length : undefined },
+      ]}
+    />
+    <div class="p-3">
   <!-- Action Toolbar -->
   <div class="flex flex-wrap items-center justify-between gap-2">
     <div class="flex flex-wrap items-center gap-2">
@@ -421,6 +407,8 @@
       >
         Clear
       </button>
+    </div>
+  </div>
     </div>
   </div>
 

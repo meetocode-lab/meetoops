@@ -10,7 +10,8 @@
   import { toast } from '../lib/toast.svelte';
   import Select from './ui/Select.svelte';
   import Checkbox from './ui/Checkbox.svelte';
-  import { Database, Table2, Play, Shield, AlertCircle, Loader2, Download, KeyRound } from 'lucide-svelte';
+  import ExplorerTabs from './ui/ExplorerTabs.svelte';
+  import { Database, Table2, Play, Shield, AlertCircle, Loader2, Download, KeyRound, Columns3, TerminalSquare } from 'lucide-svelte';
 
   interface Props {
     lang: Language;
@@ -372,47 +373,32 @@
       </div>
 
       <!-- Right Data / Schema / SQL Panel -->
-      <div class="lg:col-span-9 rounded-[var(--radius-md)] bg-[var(--surface)] border border-[var(--border)] overflow-hidden flex flex-col">
-        <div class="px-4 pt-2 border-b border-[var(--border)] flex items-center justify-between">
-          <div class="flex gap-2">
-            <button
-              type="button"
-              onclick={() => (tab = 'rows')}
-              class="px-3 py-2 text-xs font-medium border-b-2 {tab === 'rows' ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-transparent text-[var(--muted-foreground)]'}"
-            >
-              Records
-            </button>
-            <button
-              type="button"
-              onclick={() => (tab = 'schema')}
-              class="px-3 py-2 text-xs font-medium border-b-2 {tab === 'schema' ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-transparent text-[var(--muted-foreground)]'}"
-            >
-              Columns / Schema
-            </button>
-            {#if activeService?.service_type !== 'mongodb'}
-              <button
-                type="button"
-                onclick={() => (tab = 'sql')}
-                class="px-3 py-2 text-xs font-medium border-b-2 {tab === 'sql' ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-transparent text-[var(--muted-foreground)]'}"
-              >
-                SQL Editor
-              </button>
-            {/if}
-          </div>
-
-          <div class="flex items-center gap-2 pb-1.5">
+      <div class="lg:col-span-9 rounded-[var(--radius-lg)] bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-sm)] overflow-hidden flex flex-col">
+        <ExplorerTabs
+          framed={false}
+          compact
+          bind:active={tab}
+          tabs={[
+            { id: 'rows', label: 'Records', icon: Table2, badge: queryResult && tab === 'rows' ? queryResult.rows.length : undefined },
+            { id: 'schema', label: 'Columns / Schema', icon: Columns3, badge: columns.length > 0 ? columns.length : undefined },
+            ...(activeService?.service_type !== 'mongodb'
+              ? [{ id: 'sql', label: 'SQL Editor', icon: TerminalSquare }]
+              : []),
+          ]}
+        >
+          {#snippet actions()}
             {#if queryResult && queryResult.rows.length > 0 && tab !== 'schema'}
               <button
                 type="button"
                 onclick={exportCsv}
-                class="px-2.5 py-1 rounded bg-[var(--surface-secondary)] hover:bg-[var(--surface-elevated)] border border-[var(--border)] text-[11px] font-medium text-[var(--foreground)] inline-flex items-center gap-1"
+                class="h-7 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface)] hover:bg-[var(--surface-elevated)] border border-[var(--border)] text-[11px] font-medium text-[var(--foreground)] inline-flex items-center gap-1 transition-colors"
               >
                 <Download class="w-3 h-3" /> CSV
               </button>
               <button
                 type="button"
                 onclick={exportJson}
-                class="px-2.5 py-1 rounded bg-[var(--surface-secondary)] hover:bg-[var(--surface-elevated)] border border-[var(--border)] text-[11px] font-medium text-[var(--foreground)] inline-flex items-center gap-1"
+                class="h-7 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface)] hover:bg-[var(--surface-elevated)] border border-[var(--border)] text-[11px] font-medium text-[var(--foreground)] inline-flex items-center gap-1 transition-colors"
               >
                 <Download class="w-3 h-3" /> JSON
               </button>
@@ -420,8 +406,8 @@
             {#if busy}
               <Loader2 class="w-3.5 h-3.5 animate-spin text-[var(--primary)]" />
             {/if}
-          </div>
-        </div>
+          {/snippet}
+        </ExplorerTabs>
 
         {#if tab === 'sql'}
           <div class="p-4 border-b border-[var(--border)] space-y-2">

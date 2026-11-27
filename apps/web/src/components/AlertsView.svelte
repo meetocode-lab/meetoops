@@ -15,8 +15,9 @@
   import PaginationBar from './ui/PaginationBar.svelte';
   import SortHeader from './ui/SortHeader.svelte';
   import Checkbox from './ui/Checkbox.svelte';
+  import ExplorerTabs from './ui/ExplorerTabs.svelte';
   import TableSkeleton from './ui/TableSkeleton.svelte';
-  import { Bell, Plus, Trash2, CheckCircle2, AlertCircle, Search, Send, Webhook } from 'lucide-svelte';
+  import { Bell, Plus, Trash2, CheckCircle2, AlertCircle, Search, Send, Webhook, History, SlidersHorizontal } from 'lucide-svelte';
 
   interface Props {
     lang: Language;
@@ -275,31 +276,6 @@
     </p>
   </div>
 
-  <div class="flex gap-1 border-b border-[var(--border)]">
-    <button
-      type="button"
-      onclick={() => (tab = 'events')}
-      class="px-3.5 py-2 text-xs font-medium border-b-2 {tab === 'events' ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-transparent text-[var(--muted-foreground)]'}"
-    >
-      Alert History
-    </button>
-    <button
-      type="button"
-      onclick={() => (tab = 'rules')}
-      class="px-3.5 py-2 text-xs font-medium border-b-2 {tab === 'rules' ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-transparent text-[var(--muted-foreground)]'}"
-    >
-      Threshold Rules
-    </button>
-    <button
-      type="button"
-      onclick={() => (tab = 'channels')}
-      class="px-3.5 py-2 text-xs font-medium border-b-2 inline-flex items-center gap-1.5 {tab === 'channels' ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-transparent text-[var(--muted-foreground)]'}"
-    >
-      <Webhook class="w-3.5 h-3.5" />
-      Notification Channels
-    </button>
-  </div>
-
   {#if errorMsg}
     <div class="flex items-center gap-2 p-3 rounded-[var(--radius-md)] bg-[var(--danger-subtle)] border border-[var(--danger)]/40 text-[var(--danger)] text-xs">
       <AlertCircle class="w-4 h-4 shrink-0" />
@@ -307,6 +283,15 @@
     </div>
   {/if}
 
+  <ExplorerTabs
+    bind:active={tab}
+    bodyClass="p-5 space-y-4"
+    tabs={[
+      { id: 'events', label: 'Alert History', icon: History, badge: meta.total > 0 ? meta.total : undefined },
+      { id: 'rules', label: 'Threshold Rules', icon: SlidersHorizontal, badge: rules.length > 0 ? rules.length : undefined },
+      { id: 'channels', label: 'Notification Channels', icon: Webhook, badge: channels.length > 0 ? channels.length : undefined },
+    ]}
+  >
   {#if tab === 'events'}
     <div class="flex flex-wrap items-center gap-2">
       <div class="relative">
@@ -614,4 +599,5 @@
       {/if}
     </div>
   {/if}
+  </ExplorerTabs>
 </div>

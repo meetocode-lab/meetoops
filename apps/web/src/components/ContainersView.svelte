@@ -15,6 +15,7 @@
   import SortHeader from './ui/SortHeader.svelte';
   import TableSkeleton from './ui/TableSkeleton.svelte';
   import Skeleton from './ui/Skeleton.svelte';
+  import ExplorerTabs from './ui/ExplorerTabs.svelte';
   import {
     RefreshCw,
     Play,
@@ -30,6 +31,11 @@
     AlertCircle,
     X,
     Box,
+    Info,
+    Activity,
+    KeyRound,
+    HardDrive,
+    Tags,
   } from 'lucide-svelte';
 
   interface Props {
@@ -458,19 +464,22 @@
         </button>
       </div>
 
-      <div class="flex gap-2 border-b border-[var(--border)]">
-        {#each ['overview', 'stats', 'env', 'mounts', 'labels'] as tName}
-          <button
-            type="button"
-            onclick={() => {
-              inspectTab = tName as typeof inspectTab;
-              if (tName === 'stats' && inspected) loadContainerStats(inspected.id);
-            }}
-            class="px-3 py-1.5 text-xs font-medium capitalize border-b-2 {inspectTab === tName ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-transparent text-[var(--muted-foreground)]'}"
-          >
-            {tName}
-          </button>
-        {/each}
+      <div class="-mx-5">
+        <ExplorerTabs
+          framed={false}
+          compact
+          bind:active={inspectTab}
+          onChange={(id) => {
+            if (id === 'stats' && inspected) loadContainerStats(inspected.id);
+          }}
+          tabs={[
+            { id: 'overview', label: 'Overview', icon: Info },
+            { id: 'stats', label: 'Live Stats', icon: Activity },
+            { id: 'env', label: 'Env', icon: KeyRound, badge: inspected.env.length },
+            { id: 'mounts', label: 'Mounts', icon: HardDrive, badge: inspected.mounts.length },
+            { id: 'labels', label: 'Labels', icon: Tags, badge: Object.keys(inspected.labels).length },
+          ]}
+        />
       </div>
 
       {#if inspectTab === 'overview'}

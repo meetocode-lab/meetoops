@@ -9,6 +9,7 @@
   import { confirmDialog } from '../lib/confirm.svelte';
   import { toast } from '../lib/toast.svelte';
   import Select from './ui/Select.svelte';
+  import ExplorerTabs from './ui/ExplorerTabs.svelte';
   import TableSkeleton from './ui/TableSkeleton.svelte';
   import Skeleton from './ui/Skeleton.svelte';
   import {
@@ -35,6 +36,10 @@
     DownloadCloud,
     Copy,
     Save,
+    Server,
+    FolderGit2,
+    GitCommitHorizontal,
+    ShieldCheck,
   } from 'lucide-svelte';
 
   interface Props {
@@ -457,47 +462,47 @@
 <!-- ======================== PROJECT DETAIL PAGE (/projects/:id) ======================== -->
 {#if selectedProjectId}
   <div class="w-full space-y-5">
-    <!-- Breadcrumb -->
-    <div class="flex items-center gap-2 text-xs text-[var(--muted-foreground)]">
-      <button
-        type="button"
-        onclick={backToList}
-        class="inline-flex items-center gap-1.5 hover:text-[var(--foreground)] transition-colors"
-      >
-        <ArrowLeft class="w-3.5 h-3.5" />
-        <span>{lang === 'id' ? 'Proyek GitHub' : 'Projects'}</span>
-      </button>
-      <ChevronRight class="w-3.5 h-3.5 opacity-60" />
-      <span class="font-medium text-[var(--foreground)]">{activeProject?.name ?? '…'}</span>
-    </div>
-
     {#if loading && !activeProject}
-      <div class="space-y-4">
-        <Skeleton class="h-20 w-full rounded-[var(--radius-md)]" />
-        <Skeleton class="h-72 w-full rounded-[var(--radius-md)]" />
+      <div class="space-y-3">
+        <Skeleton class="h-14 w-full rounded-[var(--radius-lg)]" />
+        <Skeleton class="h-80 w-full rounded-[var(--radius-lg)]" />
       </div>
     {:else if !activeProject}
-      <div class="p-8 rounded-[var(--radius-md)] bg-[var(--surface)] border border-[var(--border)] text-center space-y-3">
+      <div class="p-10 rounded-[var(--radius-lg)] bg-[var(--surface)] border border-[var(--border)] text-center space-y-3">
         <div class="text-sm font-medium text-[var(--foreground)]">Project not found</div>
         <button
           type="button"
           onclick={backToList}
-          class="h-[34px] px-3 rounded-[var(--radius-md)] bg-[var(--primary)] text-[var(--primary-foreground)] text-xs font-medium"
+          class="h-[34px] px-3.5 rounded-[var(--radius-md)] bg-[var(--primary)] text-[var(--primary-foreground)] text-xs font-medium"
         >
           Back to Projects
         </button>
       </div>
     {:else}
-      <!-- Project Header Card -->
-      <div class="p-5 rounded-[var(--radius-md)] bg-[var(--surface)] border border-[var(--border)] flex flex-wrap items-start justify-between gap-4">
-        <div class="space-y-1.5 min-w-0">
-          <div class="flex flex-wrap items-center gap-2">
-            <h1 class="text-xl font-semibold text-[var(--foreground)] tracking-tight">{activeProject.name}</h1>
-            <span class="px-2 py-0.5 rounded bg-[var(--primary-subtle)] text-[var(--primary)] font-mono text-[11px] font-medium">
+      <!-- Unified File-Explorer Address + Command Bar -->
+      <div class="rounded-[var(--radius-lg)] bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-xs)] overflow-hidden">
+        <!-- Top Address & Action Row -->
+        <div class="px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+          <div class="flex flex-wrap items-center gap-2 min-w-0">
+            <button
+              type="button"
+              onclick={backToList}
+              class="h-7 px-2 rounded-[var(--radius-md)] hover:bg-[var(--surface-elevated)] text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] inline-flex items-center gap-1 transition-colors"
+              title="Back to Projects"
+            >
+              <ArrowLeft class="w-3.5 h-3.5" />
+              <span>{lang === 'id' ? 'Proyek' : 'Projects'}</span>
+            </button>
+            <ChevronRight class="w-3.5 h-3.5 text-[var(--subtle-foreground)] shrink-0" />
+            <h1 class="text-base font-semibold text-[var(--foreground)] tracking-tight truncate">
+              {activeProject.name}
+            </h1>
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-[var(--radius-sm)] bg-[var(--primary-subtle)] text-[var(--primary)] font-mono text-[11px] font-medium">
+              <GitBranch class="w-3 h-3" />
               {activeProject.branch}
             </span>
             <span
-              class="px-2 py-0.5 rounded-full text-[11px] font-medium capitalize {activeProject.last_status === 'running'
+              class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium capitalize {activeProject.last_status === 'running'
                 ? 'bg-[var(--success-subtle)] text-[var(--success)]'
                 : activeProject.last_status === 'failed'
                   ? 'bg-[var(--danger-subtle)] text-[var(--danger)]'
@@ -505,63 +510,88 @@
                     ? 'bg-[var(--info-subtle)] text-[var(--info)]'
                     : 'bg-[var(--surface-secondary)] text-[var(--muted-foreground)]'}"
             >
+              <span
+                class="w-1.5 h-1.5 rounded-full {activeProject.last_status === 'running'
+                  ? 'bg-[var(--success)]'
+                  : activeProject.last_status === 'failed'
+                    ? 'bg-[var(--danger)]'
+                    : activeProject.last_status === 'deploying'
+                      ? 'bg-[var(--info)] animate-pulse'
+                      : 'bg-[var(--subtle-foreground)]'}"
+              ></span>
               {activeProject.last_status}
             </span>
             {#if activeProject.update_available}
               <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[var(--warning-subtle)] text-[var(--warning)] text-[11px] font-medium">
-                <ArrowUpCircle class="w-3 h-3" /> Update available ({activeProject.remote_head_commit})
+                <ArrowUpCircle class="w-3 h-3" /> Update ({activeProject.remote_head_commit})
               </span>
             {/if}
           </div>
-          <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[var(--muted-foreground)] font-mono">
-            <span class="truncate max-w-md">{activeProject.repo_url}</span>
-            <span>·</span>
-            <span>{activeProject.deploy_path}</span>
-            <span>·</span>
-            <span class="font-sans text-[var(--foreground)]">{activeProject.ssh_host_name}</span>
-            {#if activeProject.last_deployed_commit}
-              <span>·</span>
-              <span>HEAD {activeProject.last_deployed_commit}</span>
+
+          <!-- Precision Command Strip -->
+          <div class="flex flex-wrap items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              disabled={checkingId === activeProject.id}
+              onclick={() => handleCheckRemote(activeProject)}
+              class="h-[32px] px-2.5 rounded-[var(--radius-md)] bg-[var(--surface)] hover:bg-[var(--surface-elevated)] border border-[var(--border-strong)] text-xs font-medium text-[var(--foreground)] inline-flex items-center gap-1.5 transition-colors disabled:opacity-40"
+            >
+              <RefreshCw class="w-3.5 h-3.5 text-[var(--muted-foreground)] {checkingId === activeProject.id ? 'animate-spin' : ''}" />
+              Check GitHub
+            </button>
+            {#if canOperate}
+              <button
+                type="button"
+                disabled={busyProjectId === activeProject.id}
+                onclick={() => handleDeploy(activeProject)}
+                class="h-[32px] px-3.5 rounded-[var(--radius-md)] bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-[var(--primary-foreground)] text-xs font-medium inline-flex items-center gap-1.5 shadow-[var(--shadow-xs)] transition-colors disabled:opacity-40"
+              >
+                {#if busyProjectId === activeProject.id}<Loader2 class="w-3.5 h-3.5 animate-spin" />{:else}<Rocket class="w-3.5 h-3.5" />{/if}
+                Deploy Now
+              </button>
+              <div class="inline-flex items-center rounded-[var(--radius-md)] border border-[var(--border-strong)] overflow-hidden divide-x divide-[var(--border)]">
+                <button
+                  type="button"
+                  disabled={busyProjectId === activeProject.id}
+                  onclick={() => handleAction(activeProject, 'restart')}
+                  class="h-[30px] px-2.5 bg-[var(--surface)] hover:bg-[var(--surface-elevated)] text-xs font-medium text-[var(--foreground)] inline-flex items-center gap-1 transition-colors disabled:opacity-40"
+                  title="Restart project"
+                >
+                  <RotateCw class="w-3.5 h-3.5 text-[var(--primary)]" /> Restart
+                </button>
+                <button
+                  type="button"
+                  disabled={busyProjectId === activeProject.id}
+                  onclick={() => handleAction(activeProject, 'stop')}
+                  class="h-[30px] px-2.5 bg-[var(--surface)] hover:bg-[var(--danger-subtle)] text-xs font-medium text-[var(--danger)] inline-flex items-center gap-1 transition-colors disabled:opacity-40"
+                  title="Stop project"
+                >
+                  <Square class="w-3 h-3" /> Stop
+                </button>
+              </div>
             {/if}
           </div>
         </div>
 
-        <div class="flex flex-wrap items-center gap-2 shrink-0">
-          <button
-            type="button"
-            disabled={checkingId === activeProject.id}
-            onclick={() => handleCheckRemote(activeProject)}
-            class="h-[34px] px-3 rounded-[var(--radius-md)] bg-[var(--surface)] hover:bg-[var(--surface-elevated)] border border-[var(--border-strong)] text-xs font-medium inline-flex items-center gap-1.5 disabled:opacity-40"
-          >
-            <RefreshCw class="w-3.5 h-3.5 {checkingId === activeProject.id ? 'animate-spin' : ''}" />
-            Check GitHub
-          </button>
-          {#if canOperate}
-            <button
-              type="button"
-              disabled={busyProjectId === activeProject.id}
-              onclick={() => handleDeploy(activeProject)}
-              class="h-[34px] px-3.5 rounded-[var(--radius-md)] bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-[var(--primary-foreground)] text-xs font-medium inline-flex items-center gap-1.5 disabled:opacity-40"
-            >
-              {#if busyProjectId === activeProject.id}<Loader2 class="w-3.5 h-3.5 animate-spin" />{:else}<Rocket class="w-3.5 h-3.5" />{/if}
-              Deploy Now
-            </button>
-            <button
-              type="button"
-              disabled={busyProjectId === activeProject.id}
-              onclick={() => handleAction(activeProject, 'restart')}
-              class="h-[34px] px-3 rounded-[var(--radius-md)] bg-[var(--surface)] hover:bg-[var(--surface-elevated)] border border-[var(--border-strong)] text-xs font-medium inline-flex items-center gap-1.5 disabled:opacity-40"
-            >
-              <RotateCw class="w-3.5 h-3.5 text-[var(--primary)]" /> Restart
-            </button>
-            <button
-              type="button"
-              disabled={busyProjectId === activeProject.id}
-              onclick={() => handleAction(activeProject, 'stop')}
-              class="h-[34px] px-3 rounded-[var(--radius-md)] bg-[var(--surface)] hover:bg-[var(--danger-subtle)] border border-[var(--border-strong)] text-xs font-medium text-[var(--danger)] inline-flex items-center gap-1.5 disabled:opacity-40"
-            >
-              <Square class="w-3.5 h-3.5" /> Stop
-            </button>
+        <!-- Compact Path & Repo Metadata Strip -->
+        <div class="px-4 py-2 bg-[var(--surface-secondary)]/55 border-t border-[var(--border)] flex flex-wrap items-center gap-x-4 gap-y-1 text-[11.5px] text-[var(--muted-foreground)]">
+          <span class="inline-flex items-center gap-1.5 font-medium text-[var(--foreground)]">
+            <Server class="w-3.5 h-3.5 text-[var(--primary)]" />
+            {activeProject.ssh_host_name}
+          </span>
+          <span class="text-[var(--border-strong)]" aria-hidden="true">|</span>
+          <span class="inline-flex items-center gap-1.5 font-mono truncate max-w-md" title={activeProject.repo_url}>
+            <FolderGit2 class="w-3.5 h-3.5 text-[var(--subtle-foreground)] shrink-0" />
+            {activeProject.repo_url}
+          </span>
+          <span class="text-[var(--border-strong)]" aria-hidden="true">|</span>
+          <span class="font-mono text-[var(--foreground)]/85">{activeProject.deploy_path}</span>
+          {#if activeProject.last_deployed_commit}
+            <span class="text-[var(--border-strong)]" aria-hidden="true">|</span>
+            <span class="inline-flex items-center gap-1 font-mono tabular-nums">
+              <GitCommitHorizontal class="w-3.5 h-3.5 text-[var(--subtle-foreground)]" />
+              {activeProject.last_deployed_commit}
+            </span>
           {/if}
         </div>
       </div>
@@ -573,271 +603,372 @@
         </div>
       {/if}
 
-      <!-- 4 Clean Workspace Tabs -->
-      <div class="flex items-center gap-1 border-b border-[var(--border)]">
-        <button
-          type="button"
-          onclick={() => (detailTab = 'deployments')}
-          class="px-3.5 py-2 text-xs font-medium border-b-2 inline-flex items-center gap-1.5 transition-colors {detailTab === 'deployments' ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}"
-        >
-          <ScrollText class="w-3.5 h-3.5" /> Deployments & Logs
-        </button>
-        <button
-          type="button"
-          onclick={() => (detailTab = 'pipeline')}
-          class="px-3.5 py-2 text-xs font-medium border-b-2 inline-flex items-center gap-1.5 transition-colors {detailTab === 'pipeline' ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}"
-        >
-          <Terminal class="w-3.5 h-3.5" /> Deploy Pipeline
-        </button>
-        <button
-          type="button"
-          onclick={() => (detailTab = 'env')}
-          class="px-3.5 py-2 text-xs font-medium border-b-2 inline-flex items-center gap-1.5 transition-colors {detailTab === 'env' ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}"
-        >
-          <KeyRound class="w-3.5 h-3.5" /> Environment (.env)
-        </button>
-        <button
-          type="button"
-          onclick={() => (detailTab = 'settings')}
-          class="px-3.5 py-2 text-xs font-medium border-b-2 inline-flex items-center gap-1.5 transition-colors {detailTab === 'settings' ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}"
-        >
-          <Settings2 class="w-3.5 h-3.5" /> Settings
-        </button>
-      </div>
-
-      <!-- Tab 1: Deployments & Logs -->
-      {#if detailTab === 'deployments'}
-        {#if loadingLogs}
-          <TableSkeleton rows={4} columns={3} />
-        {:else if deployments.length === 0}
-          <div class="p-10 rounded-[var(--radius-md)] bg-[var(--surface)] border border-[var(--border)] text-center space-y-2">
-            <Rocket class="w-6 h-6 text-[var(--muted-foreground)] mx-auto" />
-            <div class="text-xs text-[var(--muted-foreground)]">
-              No deployments recorded yet. Click <strong>Deploy Now</strong> above to run your first deployment.
-            </div>
-          </div>
-        {:else}
-          <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
-            <div class="lg:col-span-4 rounded-[var(--radius-md)] bg-[var(--surface)] border border-[var(--border)] divide-y divide-[var(--border-subtle)] max-h-[60vh] overflow-y-auto">
-              {#each deployments as d}
-                <button
-                  type="button"
-                  onclick={() => (activeDeployLog = d)}
-                  class="w-full text-left px-3.5 py-3 transition-colors {activeDeployLog?.id === d.id ? 'bg-[var(--primary-subtle)]' : 'hover:bg-[var(--surface-elevated)]'}"
-                >
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-xs font-semibold capitalize text-[var(--foreground)]">{d.action}</span>
-                    <span
-                      class="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase {d.status === 'success'
-                        ? 'bg-[var(--success-subtle)] text-[var(--success)]'
-                        : d.status === 'failed'
-                          ? 'bg-[var(--danger-subtle)] text-[var(--danger)]'
-                          : 'bg-[var(--info-subtle)] text-[var(--info)]'}"
-                    >
-                      {d.status}
-                    </span>
-                  </div>
-                  <div class="mt-1 flex items-center justify-between text-[11px] text-[var(--muted-foreground)] font-mono">
-                    <span>{d.commit_hash ?? '—'}</span>
-                    <span>{new Date(d.started_at).toLocaleString()}</span>
-                  </div>
-                </button>
-              {/each}
-            </div>
-
-            <div class="lg:col-span-8 rounded-[var(--radius-md)] bg-[var(--surface)] border border-[var(--border)] flex flex-col overflow-hidden">
-              <div class="px-4 py-2.5 border-b border-[var(--border)] flex items-center justify-between bg-[var(--surface-secondary)]">
-                <span class="text-xs font-mono text-[var(--foreground)]">
-                  {activeDeployLog ? `${activeDeployLog.action} · ${activeDeployLog.status} · ${activeDeployLog.commit_hash ?? ''}` : 'Output Log'}
-                </span>
-                <button
-                  type="button"
-                  onclick={copyLog}
-                  class="px-2 py-1 rounded border border-[var(--border)] bg-[var(--surface)] text-[11px] inline-flex items-center gap-1 hover:bg-[var(--surface-elevated)]"
-                >
-                  <Copy class="w-3 h-3" /> Copy
-                </button>
-              </div>
-              <pre class="p-4 bg-[#071426] text-[#e2e8f0] font-mono text-xs overflow-auto h-[55vh] whitespace-pre-wrap">{activeDeployLog?.log_output || '(no output)'}</pre>
-            </div>
-          </div>
-        {/if}
-
-      <!-- Tab 2: Deploy Pipeline -->
-      {:else if detailTab === 'pipeline'}
-        <form onsubmit={handleSavePipeline} class="p-5 rounded-[var(--radius-md)] bg-[var(--surface)] border border-[var(--border)] space-y-4">
-          <div class="max-w-xs space-y-1">
-            <label class="block space-y-1">
-              <span class="text-[11px] text-[var(--muted-foreground)]">Git Branch</span>
-              <input type="text" required bind:value={editBranch} class="w-full px-3 rounded-[var(--radius-md)] bg-[var(--background)] border border-[var(--border-strong)] font-mono text-xs" />
-            </label>
-          </div>
-
-          <div class="space-y-2.5 p-4 rounded-[var(--radius-md)] bg-[var(--background)] border border-[var(--border)]">
-            <div class="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <h3 class="text-xs font-semibold text-[var(--foreground)]">Post-Pull Deploy Commands (Sequential)</h3>
-                <p class="text-[11px] text-[var(--muted-foreground)]">
-                  Runs in order inside <code class="font-mono">{activeProject.deploy_path}</code> right after <code class="font-mono">git pull</code> & <code class="font-mono">.env</code> sync.
-                </p>
-              </div>
-              <button
-                type="button"
-                onclick={() => (editSteps = [...editSteps, ''])}
-                class="h-[30px] px-2.5 rounded bg-[var(--primary-subtle)] text-[var(--primary)] text-[11px] font-medium inline-flex items-center gap-1"
-              >
-                <Plus class="w-3 h-3" /> Add Step
-              </button>
-            </div>
-
-            <div class="space-y-2">
-              {#each editSteps as _, idx}
-                <div class="flex items-center gap-2">
-                  <span class="w-14 shrink-0 text-[11px] font-mono text-[var(--muted-foreground)]">Step {idx + 1}</span>
-                  <input
-                    type="text"
-                    bind:value={editSteps[idx]}
-                    placeholder="e.g. docker compose up -d --build"
-                    class="flex-1 px-3 rounded-[var(--radius-md)] bg-[var(--surface)] border border-[var(--border-strong)] font-mono text-xs"
-                  />
-                  {#if editSteps.length > 1}
-                    <button
-                      type="button"
-                      onclick={() => (editSteps = editSteps.filter((_, i) => i !== idx))}
-                      class="h-[34px] w-[34px] inline-flex items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--danger)] hover:bg-[var(--danger-subtle)]"
-                      title="Remove step"
-                    >
-                      <X class="w-3.5 h-3.5" />
-                    </button>
-                  {/if}
-                </div>
-              {/each}
-            </div>
-
-            <div class="flex flex-wrap items-center gap-1.5 pt-1">
-              <span class="text-[10px] uppercase tracking-wider text-[var(--muted-foreground)] mr-1">Quick Add:</span>
-              {#each commandPresets as preset}
-                <button
-                  type="button"
-                  onclick={() => (editSteps = [...editSteps.filter((s) => s.trim()), preset.cmd])}
-                  class="px-2 py-0.5 rounded bg-[var(--surface)] hover:bg-[var(--surface-elevated)] border border-[var(--border)] text-[11px] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-                >
-                  + {preset.label}
-                </button>
-              {/each}
-            </div>
-          </div>
-
-          <div class="flex justify-end">
+      <!-- File-Explorer Connected Tab Workbench -->
+      <ExplorerTabs
+        bind:active={detailTab}
+        tabs={[
+          {
+            id: 'deployments',
+            label: 'Deployments & Logs',
+            icon: ScrollText,
+            badge: deployments.length > 0 ? deployments.length : undefined,
+          },
+          {
+            id: 'pipeline',
+            label: 'Deploy Pipeline',
+            icon: Terminal,
+            badge: `${editSteps.filter((s) => s.trim()).length || 1} step${(editSteps.filter((s) => s.trim()).length || 1) > 1 ? 's' : ''}`,
+          },
+          {
+            id: 'env',
+            label: 'Environment (.env)',
+            icon: KeyRound,
+            dot: activeProject.has_env_vars ? 'success' : undefined,
+          },
+          {
+            id: 'settings',
+            label: 'Settings',
+            icon: Settings2,
+          },
+        ]}
+      >
+        {#snippet actions()}
+          {#if detailTab === 'deployments' && activeDeployLog}
             <button
-              type="submit"
-              disabled={!canOperate || savingConfig}
-              class="h-[34px] px-4 rounded-[var(--radius-md)] bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-[var(--primary-foreground)] text-xs font-medium inline-flex items-center gap-1.5 disabled:opacity-50"
+              type="button"
+              onclick={copyLog}
+              class="h-7 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface)] hover:bg-[var(--surface-elevated)] border border-[var(--border)] text-[11px] font-medium text-[var(--foreground)] inline-flex items-center gap-1 transition-colors"
             >
-              {#if savingConfig}<Loader2 class="w-3.5 h-3.5 animate-spin" />{:else}<Save class="w-3.5 h-3.5" />{/if}
-              Save Pipeline
+              <Copy class="w-3 h-3" /> Copy Log
             </button>
-          </div>
-        </form>
-
-      <!-- Tab 3: Environment (.env) -->
-      {:else if detailTab === 'env'}
-        <form onsubmit={handleSaveEnv} class="p-5 rounded-[var(--radius-md)] bg-[var(--surface)] border border-[var(--border)] space-y-4">
-          <div class="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 class="text-sm font-semibold text-[var(--foreground)]">Environment Variables (.env)</h3>
-              <p class="text-xs text-[var(--muted-foreground)]">
-                Stored encrypted with AES-256-GCM in MeetoOps Vault and written with <code class="font-mono">chmod 600</code> during deploy.
-              </p>
-            </div>
+          {:else if detailTab === 'env'}
             <button
               type="button"
               disabled={pullingEnv}
               onclick={handlePullEnvFromServer}
-              class="h-[34px] px-3 rounded-[var(--radius-md)] bg-[var(--surface-secondary)] hover:bg-[var(--surface-elevated)] border border-[var(--border-strong)] text-xs font-medium inline-flex items-center gap-1.5 disabled:opacity-50"
+              class="h-7 px-2.5 rounded-[var(--radius-sm)] bg-[var(--surface)] hover:bg-[var(--surface-elevated)] border border-[var(--border-strong)] text-[11px] font-medium text-[var(--foreground)] inline-flex items-center gap-1.5 transition-colors disabled:opacity-50"
             >
-              {#if pullingEnv}<Loader2 class="w-3.5 h-3.5 animate-spin" />{:else}<DownloadCloud class="w-3.5 h-3.5 text-[var(--primary)]" />{/if}
+              {#if pullingEnv}<Loader2 class="w-3 h-3 animate-spin" />{:else}<DownloadCloud class="w-3 h-3 text-[var(--primary)]" />{/if}
               Pull .env from Server
             </button>
-          </div>
+          {/if}
+        {/snippet}
 
-          {#if loadingEnv}
-            <Skeleton class="h-48 w-full rounded-[var(--radius-md)]" />
+        <!-- Tab 1: Deployments & Logs -->
+        {#if detailTab === 'deployments'}
+          {#if loadingLogs}
+            <div class="p-5">
+              <TableSkeleton rows={4} columns={3} />
+            </div>
+          {:else if deployments.length === 0}
+            <!-- Purposeful Readiness Workbench (no barren empty void) -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-[var(--border)]">
+              <div class="lg:col-span-5 p-6 flex flex-col justify-between gap-6">
+                <div class="space-y-3">
+                  <div class="inline-flex items-center gap-2 text-xs font-semibold text-[var(--primary)]">
+                    <Rocket class="w-4 h-4" />
+                    <span>Ready for First Deployment</span>
+                  </div>
+                  <h2 class="text-base font-semibold text-[var(--foreground)] tracking-tight">
+                    No deployment runs recorded yet
+                  </h2>
+                  <p class="text-xs text-[var(--muted-foreground)] leading-relaxed">
+                    MeetoOps will connect to <strong class="text-[var(--foreground)]">{activeProject.ssh_host_name}</strong> via SSH, sync branch <code class="font-mono text-[var(--foreground)]">{activeProject.branch}</code>, write your encrypted <code class="font-mono text-[var(--foreground)]">.env</code>, and execute your configured post-pull pipeline with full live output capture.
+                  </p>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2 pt-2">
+                  {#if canOperate}
+                    <button
+                      type="button"
+                      disabled={busyProjectId === activeProject.id}
+                      onclick={() => handleDeploy(activeProject)}
+                      class="h-[34px] px-4 rounded-[var(--radius-md)] bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-[var(--primary-foreground)] text-xs font-medium inline-flex items-center gap-1.5 transition-colors disabled:opacity-40"
+                    >
+                      {#if busyProjectId === activeProject.id}<Loader2 class="w-3.5 h-3.5 animate-spin" />{:else}<Rocket class="w-3.5 h-3.5" />{/if}
+                      Run First Deployment
+                    </button>
+                  {/if}
+                  <button
+                    type="button"
+                    onclick={() => (detailTab = 'pipeline')}
+                    class="h-[34px] px-3 rounded-[var(--radius-md)] bg-[var(--surface-secondary)] hover:bg-[var(--surface-elevated)] border border-[var(--border)] text-xs font-medium text-[var(--foreground)] inline-flex items-center gap-1.5 transition-colors"
+                  >
+                    <Terminal class="w-3.5 h-3.5 text-[var(--primary)]" /> Edit Pipeline
+                  </button>
+                </div>
+              </div>
+
+              <!-- Right: Live Execution Plan Preview -->
+              <div class="lg:col-span-7 bg-[#071426] text-[#cbd5e1] p-5 flex flex-col justify-between font-mono text-xs">
+                <div class="space-y-3">
+                  <div class="flex items-center justify-between text-[11px] text-[#94a3b8] pb-2 border-b border-[#1e3552]">
+                    <span>EXECUTION PLAN · {activeProject.ssh_host_name}</span>
+                    <span>{activeProject.deploy_path}</span>
+                  </div>
+                  <div class="space-y-2 leading-relaxed">
+                    <div class="flex items-start gap-2.5">
+                      <span class="text-[#38bdf8] select-none">01</span>
+                      <span>cd {activeProject.deploy_path} && git fetch origin && git pull origin {activeProject.branch}</span>
+                    </div>
+                    {#if activeProject.has_env_vars}
+                      <div class="flex items-start gap-2.5">
+                        <span class="text-[#4ade80] select-none">02</span>
+                        <span>sync encrypted .env → chmod 600 .env</span>
+                      </div>
+                    {/if}
+                    {#each (editSteps.filter((s) => s.trim()).length ? editSteps.filter((s) => s.trim()) : ['docker compose up -d --build']) as step, idx}
+                      <div class="flex items-start gap-2.5">
+                        <span class="text-[#60a5fa] select-none">{String(idx + (activeProject.has_env_vars ? 3 : 2)).padStart(2, '0')}</span>
+                        <span class="text-[#f8fafc]">{step}</span>
+                      </div>
+                    {/each}
+                  </div>
+                </div>
+                <div class="mt-6 pt-3 border-t border-[#1e3552] text-[11px] text-[#64748b] flex items-center justify-between">
+                  <span>All stdout/stderr will stream & archive here</span>
+                  <span>SSH · non-interactive</span>
+                </div>
+              </div>
+            </div>
           {:else}
-            <textarea
-              rows="12"
-              bind:value={editEnv}
-              placeholder="APP_ENV=production&#10;DB_HOST=127.0.0.1"
-              class="w-full p-3 rounded-[var(--radius-md)] bg-[var(--background)] border border-[var(--border-strong)] font-mono text-xs text-[var(--foreground)]"
-            ></textarea>
+            <div class="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-[var(--border)]">
+              <div class="lg:col-span-4 divide-y divide-[var(--border-subtle)] max-h-[60vh] overflow-y-auto">
+                {#each deployments as d}
+                  <button
+                    type="button"
+                    onclick={() => (activeDeployLog = d)}
+                    class="w-full text-left px-4 py-3 transition-colors {activeDeployLog?.id === d.id
+                      ? 'bg-[var(--primary-subtle)]'
+                      : 'hover:bg-[var(--surface-elevated)]/60'}"
+                  >
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-xs font-semibold capitalize text-[var(--foreground)]">{d.action}</span>
+                      <span
+                        class="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase {d.status === 'success'
+                          ? 'bg-[var(--success-subtle)] text-[var(--success)]'
+                          : d.status === 'failed'
+                            ? 'bg-[var(--danger-subtle)] text-[var(--danger)]'
+                            : 'bg-[var(--info-subtle)] text-[var(--info)]'}"
+                      >
+                        {d.status}
+                      </span>
+                    </div>
+                    <div class="mt-1 flex items-center justify-between text-[11px] text-[var(--muted-foreground)] font-mono tabular-nums">
+                      <span>{d.commit_hash ?? '—'}</span>
+                      <span>{new Date(d.started_at).toLocaleString()}</span>
+                    </div>
+                  </button>
+                {/each}
+              </div>
+
+              <div class="lg:col-span-8 flex flex-col overflow-hidden bg-[#071426]">
+                <div class="px-4 py-2 border-b border-[#1e3552] flex items-center justify-between text-[11px] font-mono text-[#94a3b8]">
+                  <span>
+                    {activeDeployLog
+                      ? `${activeDeployLog.action} · ${activeDeployLog.status} · ${activeDeployLog.commit_hash ?? '—'}`
+                      : 'Output Log'}
+                  </span>
+                  <span>{activeDeployLog ? new Date(activeDeployLog.started_at).toLocaleTimeString() : ''}</span>
+                </div>
+                <pre class="p-4 text-[#e2e8f0] font-mono text-xs overflow-auto h-[55vh] whitespace-pre-wrap leading-relaxed">{activeDeployLog?.log_output || '(no output)'}</pre>
+              </div>
+            </div>
           {/if}
 
-          <div class="flex justify-end">
-            <button
-              type="submit"
-              disabled={!canOperate || savingConfig}
-              class="h-[34px] px-4 rounded-[var(--radius-md)] bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-[var(--primary-foreground)] text-xs font-medium inline-flex items-center gap-1.5 disabled:opacity-50"
-            >
-              {#if savingConfig}<Loader2 class="w-3.5 h-3.5 animate-spin" />{:else}<Save class="w-3.5 h-3.5" />{/if}
-              Save Encrypted .env
-            </button>
-          </div>
-        </form>
+        <!-- Tab 2: Deploy Pipeline -->
+        {:else if detailTab === 'pipeline'}
+          <form onsubmit={handleSavePipeline} class="p-6 space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-5 pb-5 border-b border-[var(--border)]">
+              <div class="space-y-1">
+                <h3 class="text-xs font-semibold text-[var(--foreground)]">Source Branch</h3>
+                <p class="text-[11px] text-[var(--muted-foreground)]">
+                  Target branch fetched & pulled before running commands.
+                </p>
+              </div>
+              <div class="md:col-span-2 max-w-xs">
+                <input
+                  type="text"
+                  required
+                  bind:value={editBranch}
+                  class="w-full px-3 rounded-[var(--radius-md)] bg-[var(--background)] border border-[var(--border-strong)] font-mono text-xs text-[var(--foreground)]"
+                />
+              </div>
+            </div>
 
-      <!-- Tab 4: Settings & Danger Zone -->
-      {:else}
-        <div class="space-y-4">
-          <form onsubmit={handleSaveSettings} class="p-5 rounded-[var(--radius-md)] bg-[var(--surface)] border border-[var(--border)] space-y-4">
-            <label class="block max-w-md space-y-1">
-              <span class="text-[11px] text-[var(--muted-foreground)]">Update GitHub PAT (optional, for private HTTPS repos)</span>
-              <input
-                type="password"
-                bind:value={editGitToken}
-                placeholder="ghp_xxxxxxxx (leave blank to keep existing)"
-                class="w-full px-3 rounded-[var(--radius-md)] bg-[var(--background)] border border-[var(--border-strong)] font-mono text-xs"
-              />
-            </label>
+            <div class="space-y-4">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 class="text-xs font-semibold text-[var(--foreground)]">Post-Pull Deploy Commands (Sequential)</h3>
+                  <p class="text-[11px] text-[var(--muted-foreground)] mt-0.5">
+                    Executed in order inside <code class="font-mono text-[var(--foreground)]">{activeProject.deploy_path}</code> right after <code class="font-mono">git pull</code> & <code class="font-mono">.env</code> sync.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onclick={() => (editSteps = [...editSteps, ''])}
+                  class="h-[30px] px-2.5 rounded-[var(--radius-md)] bg-[var(--primary-subtle)] hover:bg-[var(--primary)] hover:text-white text-[var(--primary)] text-[11px] font-medium inline-flex items-center gap-1 transition-colors"
+                >
+                  <Plus class="w-3.5 h-3.5" /> Add Step
+                </button>
+              </div>
 
-            <label class="block space-y-1">
-              <span class="text-[11px] text-[var(--muted-foreground)]">Custom docker-compose.yml Override (leave blank to use repository's file)</span>
-              <textarea
-                rows="8"
-                bind:value={editCompose}
-                class="w-full p-3 rounded-[var(--radius-md)] bg-[var(--background)] border border-[var(--border-strong)] font-mono text-xs"
-              ></textarea>
-            </label>
+              <div class="space-y-2.5">
+                {#each editSteps as _, idx}
+                  <div class="flex items-center gap-2.5">
+                    <span class="w-7 h-7 rounded-full bg-[var(--primary-subtle)] text-[var(--primary)] font-mono text-[11px] font-semibold inline-flex items-center justify-center shrink-0 tabular-nums">
+                      {idx + 1}
+                    </span>
+                    <input
+                      type="text"
+                      bind:value={editSteps[idx]}
+                      placeholder="e.g. docker compose up -d --build"
+                      class="flex-1 px-3 rounded-[var(--radius-md)] bg-[var(--background)] border border-[var(--border-strong)] font-mono text-xs text-[var(--foreground)]"
+                    />
+                    {#if editSteps.length > 1}
+                      <button
+                        type="button"
+                        onclick={() => (editSteps = editSteps.filter((_, i) => i !== idx))}
+                        class="h-[34px] w-[34px] inline-flex items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--danger)] hover:bg-[var(--danger-subtle)] transition-colors"
+                        title="Remove step"
+                      >
+                        <X class="w-3.5 h-3.5" />
+                      </button>
+                    {/if}
+                  </div>
+                {/each}
+              </div>
 
-            <div class="flex justify-end">
+              <div class="flex flex-wrap items-center gap-1.5 pt-1">
+                <span class="text-[11px] font-medium text-[var(--muted-foreground)] mr-1">Presets:</span>
+                {#each commandPresets as preset}
+                  <button
+                    type="button"
+                    onclick={() => (editSteps = [...editSteps.filter((s) => s.trim()), preset.cmd])}
+                    class="px-2.5 py-1 rounded-full bg-[var(--surface-secondary)] hover:bg-[var(--surface-elevated)] border border-[var(--border)] text-[11px] font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+                  >
+                    + {preset.label}
+                  </button>
+                {/each}
+              </div>
+            </div>
+
+            <div class="flex justify-end pt-4 border-t border-[var(--border)]">
               <button
                 type="submit"
                 disabled={!canOperate || savingConfig}
-                class="h-[34px] px-4 rounded-[var(--radius-md)] bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-[var(--primary-foreground)] text-xs font-medium inline-flex items-center gap-1.5 disabled:opacity-50"
+                class="h-[34px] px-4 rounded-[var(--radius-md)] bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-[var(--primary-foreground)] text-xs font-medium inline-flex items-center gap-1.5 transition-colors disabled:opacity-50"
               >
                 {#if savingConfig}<Loader2 class="w-3.5 h-3.5 animate-spin" />{:else}<Save class="w-3.5 h-3.5" />{/if}
-                Save Settings
+                Save Pipeline
               </button>
             </div>
           </form>
 
-          {#if canDelete}
-            <div class="p-5 rounded-[var(--radius-md)] bg-[var(--danger-subtle)]/40 border border-[var(--danger)]/40 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h3 class="text-sm font-semibold text-[var(--danger)]">Danger Zone</h3>
-                <p class="text-xs text-[var(--muted-foreground)] mt-0.5">
-                  Remove <strong>{activeProject.name}</strong> and its stored Vault secrets from MeetoOps (server files remain untouched).
-                </p>
+        <!-- Tab 3: Environment (.env) -->
+        {:else if detailTab === 'env'}
+          <form onsubmit={handleSaveEnv} class="p-6 space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div class="flex items-center gap-2 text-xs text-[var(--muted-foreground)]">
+                <ShieldCheck class="w-4 h-4 text-[var(--success)] shrink-0" />
+                <span>
+                  Encrypted with <strong class="text-[var(--foreground)]">AES-256-GCM</strong> in MeetoOps Vault and synced to <code class="font-mono text-[var(--foreground)]">{activeProject.deploy_path}/.env</code> (<code class="font-mono">chmod 600</code>).
+                </span>
               </div>
+            </div>
+
+            {#if loadingEnv}
+              <Skeleton class="h-56 w-full rounded-[var(--radius-md)]" />
+            {:else}
+              <textarea
+                rows="13"
+                bind:value={editEnv}
+                placeholder="APP_ENV=production&#10;DB_HOST=127.0.0.1"
+                class="w-full p-4 rounded-[var(--radius-md)] bg-[var(--background)] border border-[var(--border-strong)] font-mono text-xs text-[var(--foreground)] leading-relaxed"
+              ></textarea>
+            {/if}
+
+            <div class="flex justify-end pt-2 border-t border-[var(--border)]">
               <button
-                type="button"
-                onclick={() => handleDelete(activeProject)}
-                class="h-[34px] px-3.5 rounded-[var(--radius-md)] bg-[var(--danger)] text-white text-xs font-medium inline-flex items-center gap-1.5 hover:opacity-90"
+                type="submit"
+                disabled={!canOperate || savingConfig}
+                class="h-[34px] px-4 rounded-[var(--radius-md)] bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-[var(--primary-foreground)] text-xs font-medium inline-flex items-center gap-1.5 transition-colors disabled:opacity-50"
               >
-                <Trash2 class="w-3.5 h-3.5" /> Delete Project
+                {#if savingConfig}<Loader2 class="w-3.5 h-3.5 animate-spin" />{:else}<Save class="w-3.5 h-3.5" />{/if}
+                Save Encrypted .env
               </button>
             </div>
-          {/if}
-        </div>
-      {/if}
+          </form>
+
+        <!-- Tab 4: Settings & Danger Zone -->
+        {:else}
+          <div class="divide-y divide-[var(--border)]">
+            <form onsubmit={handleSaveSettings} class="p-6 space-y-5">
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div class="space-y-1">
+                  <h3 class="text-xs font-semibold text-[var(--foreground)]">GitHub Personal Access Token</h3>
+                  <p class="text-[11px] text-[var(--muted-foreground)]">
+                    Optional for private HTTPS repos. Leave blank to keep existing token or SSH key auth.
+                  </p>
+                </div>
+                <div class="md:col-span-2 max-w-md">
+                  <input
+                    type="password"
+                    bind:value={editGitToken}
+                    placeholder="ghp_xxxxxxxx (leave blank to keep existing)"
+                    class="w-full px-3 rounded-[var(--radius-md)] bg-[var(--background)] border border-[var(--border-strong)] font-mono text-xs text-[var(--foreground)]"
+                  />
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-5 pt-5 border-t border-[var(--border)]">
+                <div class="space-y-1">
+                  <h3 class="text-xs font-semibold text-[var(--foreground)]">Custom docker-compose.yml</h3>
+                  <p class="text-[11px] text-[var(--muted-foreground)]">
+                    Override the repository's compose file during deploy. Leave blank to use the repo's own file.
+                  </p>
+                </div>
+                <div class="md:col-span-2">
+                  <textarea
+                    rows="8"
+                    bind:value={editCompose}
+                    class="w-full p-3.5 rounded-[var(--radius-md)] bg-[var(--background)] border border-[var(--border-strong)] font-mono text-xs text-[var(--foreground)] leading-relaxed"
+                  ></textarea>
+                </div>
+              </div>
+
+              <div class="flex justify-end pt-3 border-t border-[var(--border)]">
+                <button
+                  type="submit"
+                  disabled={!canOperate || savingConfig}
+                  class="h-[34px] px-4 rounded-[var(--radius-md)] bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-[var(--primary-foreground)] text-xs font-medium inline-flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                >
+                  {#if savingConfig}<Loader2 class="w-3.5 h-3.5 animate-spin" />{:else}<Save class="w-3.5 h-3.5" />{/if}
+                  Save Settings
+                </button>
+              </div>
+            </form>
+
+            {#if canDelete}
+              <div class="px-6 py-4 bg-[var(--danger-subtle)]/35 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 class="text-xs font-semibold text-[var(--danger)]">Danger Zone</h3>
+                  <p class="text-[11px] text-[var(--muted-foreground)] mt-0.5">
+                    Remove <strong class="text-[var(--foreground)]">{activeProject.name}</strong> and its stored Vault secrets from MeetoOps (server files remain untouched).
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onclick={() => handleDelete(activeProject)}
+                  class="h-[32px] px-3.5 rounded-[var(--radius-md)] bg-[var(--danger)] text-white text-xs font-medium inline-flex items-center gap-1.5 hover:opacity-90 transition-opacity"
+                >
+                  <Trash2 class="w-3.5 h-3.5" /> Delete Project
+                </button>
+              </div>
+            {/if}
+          </div>
+        {/if}
+      </ExplorerTabs>
     {/if}
   </div>
 
