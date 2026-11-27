@@ -503,7 +503,7 @@
         </div>
 
         <!-- Right: Alerts + Local Host Switcher + Profile Dropdown -->
-        <div class="flex items-center justify-end gap-2.5">
+        <div class="flex items-center justify-end gap-2">
           <button
             type="button"
             onclick={() => navigate('alerts')}
@@ -518,15 +518,14 @@
             {/if}
           </button>
 
-          <div class="w-40 shrink-0">
-            <Select
-              options={serverOptions}
-              value={activeServerId}
-              onchange={(val) => (activeServerId = val)}
-              searchable={serverOptions.length > 4}
-              placeholder="Select Node"
-            />
-          </div>
+          <Select
+            class="shrink-0"
+            options={serverOptions}
+            value={activeServerId}
+            onchange={(val) => (activeServerId = val)}
+            searchable={serverOptions.length > 4}
+            placeholder="Select Node"
+          />
 
           <!-- Profile Dropdown (Theme, Language & Logout) -->
           <div bind:this={profileMenuEl} class="relative shrink-0">
