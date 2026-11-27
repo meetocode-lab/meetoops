@@ -145,6 +145,98 @@ mod win_pdh {
     }
 }
 
+mod linux_diskstats {
+    #[derive(Debug, Clone, Copy, Default)]
+    pub struct DiskStatTotals {
+        pub read_sectors: u64,
+        pub write_sectors: u64,
+        pub io_ms: u64,
+    }
+
+    /// Returns true for physical whole-disk block devices (sda, vda, xvda, nvme0n1, mmcblk0),
+    /// excluding partitions (sda1, vda1, nvme0n1p1) and virtual/loop devices to avoid double-counting.
+    pub fn is_whole_physical_disk(name: &str) -> bool {
+        if name.starts_with("loop")
+            || name.starts_with("ram")
+            || name.starts_with("sr")
+            || name.starts_with("dm-")
+            || name.starts_with("zram")
+            || name.starts_with("md")
+        {
+            return false;
+        }
+        if name.starts_with("nvme") || name.starts_with("mmcblk") {
+            // nvme0n1 is whole disk; nvme0n1p1 is partition
+            return !name.contains('p')
+                || !name
+                    .rsplit_once('p')
+                    .map(|(_, suffix)| !suffix.is_empty() && suffix.chars().all(|c| c.is_ascii_digit()))
+                    .unwrap_or(false);
+        }
+        if name.starts_with("sd")
+            || name.starts_with("vd")
+            || name.starts_with("xvd")
+            || name.starts_with("hd")
+        {
+            return !name.chars().last().map(|c| c.is_ascii_digit()).unwrap_or(true);
+        }
+        false
+    }
+
+    pub fn parse_proc_diskstats(content: &str) -> Option<DiskStatTotals> {
+        let mut totals = DiskStatTotals::default();
+        let mut matched = false;
+        for line in content.lines() {
+            let cols: Vec<&str> = line.split_whitespace().collect();
+            if cols.len() < 13 {
+                continue;
+            }
+            let dev = cols[2];
+            if !is_whole_physical_disk(dev) {
+                continue;
+            }
+            let sectors_read = cols[5].parse::<u64>().unwrap_or(0);
+            let sectors_written = cols[9].parse::<u64>().unwrap_or(0);
+            let io_ms = cols[12].parse::<u64>().unwrap_or(0);
+            totals.read_sectors = totals.read_sectors.saturating_add(sectors_read);
+            totals.write_sectors = totals.write_sectors.saturating_add(sectors_written);
+            totals.io_ms = totals.io_ms.saturating_add(io_ms);
+            matched = true;
+        }
+        if matched {
+            Some(totals)
+        } else {
+            None
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn read_current() -> Option<DiskStatTotals> {
+        let content = std::fs::read_to_string("/proc/diskstats").ok()?;
+        parse_proc_diskstats(&content)
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn compute_rates(
+        prev: DiskStatTotals,
+        curr: DiskStatTotals,
+        elapsed_secs: f64,
+    ) -> (Option<f32>, Option<f64>, Option<f64>) {
+        if elapsed_secs <= 0.05 {
+            return (None, None, None);
+        }
+        let d_read_bytes = curr.read_sectors.saturating_sub(prev.read_sectors) as f64 * 512.0;
+        let d_write_bytes = curr.write_sectors.saturating_sub(prev.write_sectors) as f64 * 512.0;
+        let d_io_ms = curr.io_ms.saturating_sub(prev.io_ms) as f64;
+
+        let active_pct = ((d_io_ms / (elapsed_secs * 1000.0)) * 100.0).clamp(0.0, 100.0);
+        let active_rounded = ((active_pct * 10.0).round() / 10.0) as f32;
+        let read_bps = ((d_read_bytes / elapsed_secs) * 10.0).round() / 10.0;
+        let write_bps = ((d_write_bytes / elapsed_secs) * 10.0).round() / 10.0;
+        (Some(active_rounded), Some(read_bps), Some(write_bps))
+    }
+}
+
 use serde::Serialize;
 use std::time::Instant;
 use sysinfo::{Disks, Networks, System};
@@ -179,6 +271,8 @@ pub struct HostMetricsCollector {
     last_sample: Option<Instant>,
     #[cfg(windows)]
     pdh: Option<win_pdh::WinPdhCollector>,
+    #[cfg(target_os = "linux")]
+    last_diskstats: Option<linux_diskstats::DiskStatTotals>,
 }
 
 impl Default for HostMetricsCollector {
@@ -199,6 +293,8 @@ impl HostMetricsCollector {
             last_sample: Some(Instant::now()),
             #[cfg(windows)]
             pdh: win_pdh::WinPdhCollector::try_new(),
+            #[cfg(target_os = "linux")]
+            last_diskstats: linux_diskstats::read_current(),
         }
     }
 
@@ -242,7 +338,19 @@ impl HostMetricsCollector {
             Some(s) => (s.disk_active_percent, s.disk_read_bps, s.disk_write_bps),
             None => (None, None, None),
         };
-        #[cfg(not(windows))]
+        #[cfg(target_os = "linux")]
+        let (disk_active_percent, disk_read_bps, disk_write_bps) = {
+            let curr = linux_diskstats::read_current();
+            let res = match (self.last_diskstats, curr) {
+                (Some(prev), Some(now_ds)) => {
+                    linux_diskstats::compute_rates(prev, now_ds, elapsed_secs)
+                }
+                _ => (None, None, None),
+            };
+            self.last_diskstats = curr;
+            res
+        };
+        #[cfg(not(any(windows, target_os = "linux")))]
         let (disk_active_percent, disk_read_bps, disk_write_bps) = (None, None, None);
 
         let mem_total = self.sys.total_memory();
@@ -371,4 +479,25 @@ pub fn render_prometheus_metrics(snap: &HostMetricsSnapshot) -> String {
         out.push_str(&format!("meetoops_host_uptime_seconds {uptime}\n"));
     }
     out
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::linux_diskstats::*;
+
+    #[test]
+    fn parses_linux_proc_diskstats_whole_disks_only() {
+        let sample = "\
+   7       0 loop0 100 0 200 10 0 0 0 0 0 10 10
+ 252       0 vda 1000 0 2048 50 500 0 4096 80 0 120 130
+ 252       1 vda1 999 0 2000 45 499 0 4000 75 0 115 120
+ 259       0 nvme0n1 200 0 1024 10 100 0 512 5 0 30 15
+ 259       1 nvme0n1p1 190 0 1000 9 90 0 500 4 0 28 14
+";
+        let totals = parse_proc_diskstats(sample).expect("parse diskstats");
+        assert_eq!(totals.read_sectors, 2048 + 1024);
+        assert_eq!(totals.write_sectors, 4096 + 512);
+        assert_eq!(totals.io_ms, 120 + 30);
+    }
 }
