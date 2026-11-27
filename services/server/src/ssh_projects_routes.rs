@@ -49,6 +49,10 @@ pub fn ssh_projects_router() -> Router<AppState> {
         )
         .route("/api/v1/projects/{id}/env", get(api_reveal_project_env))
         .route(
+            "/api/v1/projects/{id}/env/pull-from-server",
+            post(api_pull_project_env_from_server),
+        )
+        .route(
             "/api/v1/projects/{id}/check-remote",
             post(api_check_project_remote),
         )
@@ -668,6 +672,61 @@ async fn api_reveal_project_env(
             "success",
             Some(&ip),
             serde_json::json!({}),
+        )
+        .await?;
+
+    Ok(Json(ApiResponse::ok(serde_json::json!({ "env_content": content }))))
+}
+
+async fn api_pull_project_env_from_server(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    method: Method,
+    Path(id): Path<String>,
+) -> Result<Json<ApiResponse<serde_json::Value>>, ApiError> {
+    let session =
+        require_permission(&state, &headers, &method, Permission::DockerRevealSecrets).await?;
+    let project = state.store.get_project(&id).await?;
+    let (_host, cfg) = load_ssh_config(&state, &project.ssh_host_id).await?;
+
+    let env_path = format!("{}/.env", project.deploy_path.trim_end_matches('/'));
+    let cmd = format!(
+        "if [ -f {p} ]; then cat {p}; else echo '__MEETOOPS_NO_ENV__'; fi",
+        p = shell_escape(&env_path)
+    );
+    let out = exec_command(&cfg, &cmd, None, Duration::from_secs(15))
+        .await
+        .map_err(map_ssh_err)?;
+
+    if out.stdout.trim() == "__MEETOOPS_NO_ENV__" {
+        return Err(ApiError::bad_request(format!(
+            "No .env file found at {env_path} on the server."
+        )));
+    }
+
+    let content = out.stdout;
+    state
+        .store
+        .save_encrypted_secret(&state.vault, "project_env", &id, content.as_bytes())
+        .await?;
+    let _ = state
+        .store
+        .update_project_config(&id, "", "", project.compose_override.as_deref(), None, Some(!content.trim().is_empty()))
+        .await;
+
+    let ip = client_ip(&headers, state.config.trust_proxy);
+    state
+        .store
+        .write_audit_log(
+            Some(&session.user.id),
+            Some(&session.user.email),
+            "project.env_pull_from_server",
+            "container",
+            Some(&id),
+            None,
+            "success",
+            Some(&ip),
+            serde_json::json!({ "env_path": env_path }),
         )
         .await?;
 

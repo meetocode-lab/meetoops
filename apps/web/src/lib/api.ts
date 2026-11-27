@@ -1045,6 +1045,11 @@ export const api = {
     }),
   revealProjectEnv: (id: string) =>
     request<{ env_content: string }>(`/api/v1/projects/${encodeURIComponent(id)}/env`),
+  pullProjectEnvFromServer: (id: string) =>
+    request<{ env_content: string }>(
+      `/api/v1/projects/${encodeURIComponent(id)}/env/pull-from-server`,
+      { method: 'POST' },
+    ),
   deleteProject: (id: string) =>
     request<{ deleted: boolean }>(`/api/v1/projects/${encodeURIComponent(id)}`, {
       method: 'DELETE',

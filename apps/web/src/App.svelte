@@ -104,6 +104,11 @@
     return (validPages as string[]).includes(seg) ? (seg as PageKey) : 'dashboard';
   }
 
+  function projectIdFromLocation(): string | null {
+    const parts = window.location.pathname.replace(/^\/+|\/+$/g, '').split('/');
+    return parts[0] === 'projects' && parts[1] ? decodeURIComponent(parts[1]) : null;
+  }
+
   let bootLoading = $state(true);
   let bootError = $state<string | null>(null);
   let setupStatus = $state<SetupStatusDto | null>(null);
@@ -112,9 +117,11 @@
   let theme = $state<ThemePreference>(loadThemePreference());
   let appName = $state('MeetoOps');
   let activePage = $state<PageKey>(pageFromLocation());
+  let selectedProjectId = $state<string | null>(projectIdFromLocation());
 
   function navigate(page: PageKey, replace = false) {
     activePage = page;
+    selectedProjectId = null;
     const targetPath = `/${page}`;
     if (window.location.pathname !== targetPath) {
       if (replace) {
@@ -125,9 +132,19 @@
     }
   }
 
+  function navigateProject(projectId: string | null) {
+    activePage = 'projects';
+    selectedProjectId = projectId;
+    const targetPath = projectId ? `/projects/${encodeURIComponent(projectId)}` : '/projects';
+    if (window.location.pathname !== targetPath) {
+      window.history.pushState({ page: 'projects', projectId }, '', targetPath);
+    }
+  }
+
   $effect(() => {
     const onPopState = () => {
       activePage = pageFromLocation();
+      selectedProjectId = projectIdFromLocation();
     };
     window.addEventListener('popstate', onPopState);
     if (window.location.pathname === '/' || window.location.pathname === '') {
@@ -688,8 +705,10 @@
         {:else if activePage === 'projects'}
           <ProjectsView
             {lang}
+            {selectedProjectId}
             canOperate={session.permissions.includes('docker:operate')}
             canDelete={session.permissions.includes('docker:delete')}
+            onSelectProject={navigateProject}
             onOpenTerminal={() => navigate('terminal')}
           />
         {:else if activePage === 'servers'}
