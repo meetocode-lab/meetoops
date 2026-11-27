@@ -66,7 +66,7 @@
     if (tone === 'primary') return 'bg-[var(--primary-subtle)] text-[var(--primary)]';
     return isActive
       ? 'bg-[var(--surface-secondary)] text-[var(--foreground)]'
-      : 'bg-[var(--surface)]/70 text-[var(--muted-foreground)]';
+      : 'bg-[var(--surface)]/80 text-[var(--muted-foreground)]';
   }
 
   function dotClasses(dot: ExplorerTabItem['dot']): string {
@@ -80,12 +80,10 @@
 </script>
 
 {#if framed}
-  <div
-    class="rounded-[var(--radius-lg)] bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-sm)] overflow-hidden"
-  >
-    <!-- File-Explorer Tab Chrome Strip -->
+  <div class="w-full">
+    <!-- Transparent Folder-Style Tab Strip (no background bar) -->
     <div
-      class="flex items-end justify-between gap-2 bg-[var(--tab-track)] border-b border-[var(--border)] px-2 {compact ? 'pt-1.5' : 'pt-2'} select-none overflow-x-auto"
+      class="flex items-end justify-between gap-2 select-none overflow-x-auto"
     >
       <div class="flex items-end min-w-0" role="tablist">
         {#each tabs as item, i (item.id)}
@@ -95,7 +93,7 @@
 
           {#if showDivider}
             <span
-              class="self-center w-px h-3.5 bg-[var(--border-strong)]/70 mx-0.5 shrink-0"
+              class="self-center w-px h-3.5 bg-[var(--border-strong)]/60 mx-0.5 shrink-0"
               aria-hidden="true"
             ></span>
           {/if}
@@ -111,16 +109,9 @@
             class="relative inline-flex items-center gap-2 whitespace-nowrap transition-colors duration-150 cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed {compact
               ? 'px-3 py-1.5 text-[11.5px]'
               : 'px-4 py-2 text-xs'} {isActive
-              ? 'explorer-tab-active z-10 -mb-px rounded-t-[9px] bg-[var(--surface)] text-[var(--foreground)] font-semibold border-t border-x border-[var(--border)] shadow-[0_-1px_2px_rgba(15,23,42,0.03)]'
-              : 'mb-0.5 rounded-t-[8px] text-[var(--muted-foreground)] font-medium hover:text-[var(--foreground)] hover:bg-[var(--surface)]/55'}"
+              ? 'z-10 -mb-px rounded-t-[9px] bg-[var(--surface)] text-[var(--foreground)] font-semibold border-t border-x border-[var(--border)]'
+              : 'mb-0.5 rounded-t-[8px] text-[var(--muted-foreground)] font-medium hover:text-[var(--foreground)] hover:bg-[var(--surface)]/60'}"
           >
-            {#if isActive}
-              <span
-                class="absolute top-0 left-3 right-3 h-[2px] rounded-b-full bg-[var(--primary)]"
-                aria-hidden="true"
-              ></span>
-            {/if}
-
             {#if Icon}
               <Icon
                 class="w-3.5 h-3.5 shrink-0 {isActive
@@ -150,23 +141,27 @@
       </div>
 
       {#if actions}
-        <div class="flex items-center gap-1.5 pb-1.5 pr-1 shrink-0">
+        <div class="flex items-center gap-1.5 pb-1.5 shrink-0">
           {@render actions()}
         </div>
       {/if}
     </div>
 
-    <!-- Seamlessly Fused Tab Body -->
+    <!-- Seamlessly Connected Body Surface -->
     {#if children}
-      <div class={bodyClass}>
+      <div
+        class="bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-sm)] overflow-hidden {activeIndex === 0
+          ? 'rounded-b-[var(--radius-lg)] rounded-tr-[var(--radius-lg)]'
+          : 'rounded-[var(--radius-lg)]'} {bodyClass}"
+      >
         {@render children()}
       </div>
     {/if}
   </div>
 {:else}
-  <!-- Standalone Chrome Strip (for embedding directly at the top of an existing panel) -->
+  <!-- Standalone Embedded Tab Strip (no background bar) -->
   <div
-    class="flex items-end justify-between gap-2 bg-[var(--tab-track)] border-b border-[var(--border)] px-2 {compact ? 'pt-1.5' : 'pt-2'} select-none overflow-x-auto"
+    class="flex items-end justify-between gap-2 border-b border-[var(--border)] px-3 {compact ? 'pt-1.5' : 'pt-2'} select-none overflow-x-auto"
   >
     <div class="flex items-end min-w-0" role="tablist">
       {#each tabs as item, i (item.id)}
@@ -176,7 +171,7 @@
 
         {#if showDivider}
           <span
-            class="self-center w-px h-3.5 bg-[var(--border-strong)]/70 mx-0.5 shrink-0"
+            class="self-center w-px h-3.5 bg-[var(--border-strong)]/60 mx-0.5 shrink-0"
             aria-hidden="true"
           ></span>
         {/if}
@@ -192,16 +187,9 @@
           class="relative inline-flex items-center gap-2 whitespace-nowrap transition-colors duration-150 cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed {compact
             ? 'px-3 py-1.5 text-[11.5px]'
             : 'px-4 py-2 text-xs'} {isActive
-            ? 'explorer-tab-active z-10 -mb-px rounded-t-[9px] bg-[var(--surface)] text-[var(--foreground)] font-semibold border-t border-x border-[var(--border)]'
-            : 'mb-0.5 rounded-t-[8px] text-[var(--muted-foreground)] font-medium hover:text-[var(--foreground)] hover:bg-[var(--surface)]/55'}"
+            ? 'z-10 -mb-px rounded-t-[9px] bg-[var(--surface)] text-[var(--foreground)] font-semibold border-t border-x border-[var(--border)]'
+            : 'mb-0.5 rounded-t-[8px] text-[var(--muted-foreground)] font-medium hover:text-[var(--foreground)] hover:bg-[var(--surface-secondary)]/60'}"
         >
-          {#if isActive}
-            <span
-              class="absolute top-0 left-3 right-3 h-[2px] rounded-b-full bg-[var(--primary)]"
-              aria-hidden="true"
-            ></span>
-          {/if}
-
           {#if Icon}
             <Icon
               class="w-3.5 h-3.5 shrink-0 {isActive
@@ -231,7 +219,7 @@
     </div>
 
     {#if actions}
-      <div class="flex items-center gap-1.5 pb-1.5 pr-1 shrink-0">
+      <div class="flex items-center gap-1.5 pb-1.5 shrink-0">
         {@render actions()}
       </div>
     {/if}
